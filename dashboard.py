@@ -25,6 +25,7 @@ st.markdown("---")
 
 # Show latest forecast
 conn = sqlite3.connect("bakery.db")
+conn.row_factory = sqlite3.Row
 latest_plan = conn.execute(
     "SELECT * FROM production_plans ORDER BY id DESC LIMIT 1"
 ).fetchone()
