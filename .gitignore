@@ -1,0 +1,5 @@
+bakery.db
+models/
+__pycache__
+*.pyc
+.env
