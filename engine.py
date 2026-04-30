@@ -10,6 +10,7 @@ MODELS_DIR = "models"
 def get_sales_data():
     """Pull all sales from the database, formatted for Prophet."""
     conn = sqlite3.connect("bakery.db")
+    conn.row_factory = sqlite3.Row
     df = pd.read_sql_query("""
         SELECT 
             date(timestamp) as ds,
@@ -145,6 +146,7 @@ def save_forecast_to_db(forecast_results, target_date=None):
         target_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     
     conn = sqlite3.connect("bakery.db")
+    conn.row_factory = sqlite3.Row
     
     # Create plan
     cursor = conn.execute(
