@@ -60,8 +60,13 @@ if st.session_state.cart:
                 "INSERT INTO sales (product_id, store, quantity, unit_price, total, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                 (item['id'], store, item['quantity'], item['price'], item['price'], timestamp)
             )
-        conn.commit()
-        conn.close()
+            conn.commit()
+            
+            # DEBUG: Verify the sale was saved
+            count = conn.execute("SELECT COUNT(*) as cnt FROM sales").fetchone()
+            st.sidebar.write(f"Sales in DB after this transaction: {count['cnt']}")
+            
+            conn.close()
         st.session_state.cart = []
         st.success(f"✅ Sale completed at {store}!")
         st.balloons()
