@@ -2,3 +2,4 @@ streamlit
 pandas
 prophet
 plotly
+flask
