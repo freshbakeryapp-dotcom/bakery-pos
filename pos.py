@@ -1,10 +1,15 @@
 import streamlit as st
 import sqlite3
+import os
 from datetime import datetime
 from db import get_db, init_db
 
 # Initialize DB on first run
 init_db()
+
+# DEBUG: Check if DB file exists and has correct path
+st.sidebar.write(f"DB Path: {os.path.abspath('bakery.db')}")
+st.sidebar.write(f"DB Exists: {os.path.exists('bakery.db')}")
 
 st.set_page_config(page_title="Bakery POS", layout="wide")
 st.title("🧾 Bakery POS")
