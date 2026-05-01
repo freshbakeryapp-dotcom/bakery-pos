@@ -39,7 +39,11 @@ if not latest_plan:
                     st.rerun()
                 else:
                     st.error("Training failed.")
-    
+        # DEBUG: Check sales dates
+    date_check = conn.execute("SELECT COUNT(DISTINCT date(timestamp)) as cnt FROM sales").fetchone()['cnt']
+    sample = conn.execute("SELECT DISTINCT date(timestamp) as d FROM sales ORDER BY d LIMIT 5").fetchall()
+    st.write(f"Unique dates: {date_check}")
+    st.write("Sample:", [s['d'] for s in sample])
     st.markdown("---")
     st.subheader("🚀 Import Historical CSV")
     st.write("Upload your POS sales history CSV.")
