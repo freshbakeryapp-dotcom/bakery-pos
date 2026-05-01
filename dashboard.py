@@ -131,6 +131,8 @@ if latest_plan:
 else:
     # No forecast exists
     st.warning("No forecast yet.")
+    st.write(f"Debug: force_reload = {st.session_state.get('force_reload')}")
+    st.write(f"Debug: latest_plan exists = {latest_plan is not None}")
     # If we just trained models, reload to show forecast
     if st.session_state.get('force_reload'):
         st.session_state.force_reload = False
