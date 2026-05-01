@@ -44,6 +44,30 @@ init_db()
 
 latest_plan = conn.execute("SELECT * FROM production_plans ORDER BY id DESC LIMIT 1").fetchone()
 
+# Auto-train check: if last plan is older than today, train automatically
+from datetime import datetime, timedelta
+
+last_train_time = conn.execute("SELECT MAX(created_at) as last_time FROM production_plans").fetchone()['last_time']
+
+should_auto_train = False
+if last_train_time:
+    last_train_dt = datetime.strptime(last_train_time, "%Y-%m-%d %H:%M:%S")
+    hours_since_train = (datetime.now() - last_train_dt).total_seconds() / 3600
+    if hours_since_train > 20:  # Train if it's been more than 20 hours
+        should_auto_train = True
+else:
+    should_auto_train = True  # Never trained before
+
+if should_auto_train:
+    date_count = conn.execute("SELECT COUNT(DISTINCT date(timestamp)) as cnt FROM sales").fetchone()['cnt']
+    if date_count >= 3:
+        from engine import train_all_models, generate_forecast, save_forecast_to_db
+        count = train_all_models()
+        if count > 0:
+            forecast = generate_forecast()
+            save_forecast_to_db(forecast)
+            st.sidebar.success(f"🔄 Auto-trained {count} models")
+
 # ============================================================
 # MODE 1: NO FORECAST
 # ============================================================
