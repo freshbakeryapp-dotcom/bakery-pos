@@ -38,6 +38,15 @@ if not latest_plan:
                 else:
                     st.error("Training failed. Try importing historical data.")
     
+    # DEBUG: Show products and forecast items
+    all_prods = conn.execute("SELECT id, name FROM products").fetchall()
+    st.write("**Products in DB:**")
+    for p in all_prods:
+        st.write(f"  - {p['name']}")
+    
+    plan_items_raw = conn.execute("SELECT * FROM plan_items WHERE plan_id = ?", (latest_plan['id'],)).fetchall()
+    st.write(f"**Plan items in DB: {len(plan_items_raw)}**")
+    
     st.markdown("---")
     st.subheader("🚀 Or Import Historical CSV")
     st.write("Upload your POS sales history to jumpstart the AI.")
