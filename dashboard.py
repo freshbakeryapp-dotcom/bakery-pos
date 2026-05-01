@@ -375,8 +375,8 @@ if upcoming:
     st.sidebar.write("**Upcoming:**")
     for ev in upcoming[:5]:  # Show max 5
         impact_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(ev['expected_impact'], "🟡")
-        st.sidebar.caption(f"{impact_emoji} {ev['date']}: {ev['event_type'].replace('_',' ').title()} - {ev.get('description','')[:20]}")
-
+    desc = ev['description'] if ev['description'] else ''
+    st.sidebar.caption(f"{impact_emoji} {ev['date']}: {ev['event_type'].replace('_',' ').title()} - {desc[:20]}")
 # Add event form
 st.sidebar.markdown("---")
 st.sidebar.write("**Add Event:**")
