@@ -183,6 +183,68 @@ else:
             else:
                 st.error("Need more sales data to train models.")
 
+# ---- CSV Jumpstart for new bakeries ----
+if not latest_plan:
+    st.markdown("---")
+    st.subheader("🚀 Jumpstart Your AI")
+    st.write("Upload your historical POS sales CSV to train the AI immediately. After 5+ days of live sales, this won't be needed anymore.")
+    
+    csv_file = st.file_uploader("Upload Historical POS CSV", type=["csv"], key="historical_csv")
+    
+    if csv_file is not None:
+        import pandas as pd
+        
+        try:
+            raw_df = pd.read_csv(csv_file)
+            st.success(f"✅ {len(raw_df)} rows detected")
+            
+            # Basic validation
+            if 'date' not in raw_df.columns or 'product' not in raw_df.columns:
+                st.error("CSV must have 'date', 'product', 'store', and 'quantity_sold' columns.")
+            else:
+                if st.button("📥 Import Historical Data & Train AI", type="primary"):
+                    # Map CSV columns and insert into sales table
+                    inserted = 0
+                    for _, row in raw_df.iterrows():
+                        # Find product ID
+                        product_name = str(row.get('product', '')).strip()
+                        product_match = conn.execute(
+                            "SELECT id, price FROM products WHERE LOWER(name) = LOWER(?)", 
+                            (product_name,)
+                        ).fetchone()
+                        
+                        if product_match:
+                            store = str(row.get('store', 'Gadong')).strip()
+                            qty = int(row.get('quantity_sold', row.get('qty', row.get('quantity', 1))))
+                            price = float(row.get('unit_price', row.get('price', product_match['price'])))
+                            date_val = str(row['date']).strip()
+                            timestamp = f"{date_val} 10:00:00"
+                            
+                            conn.execute(
+                                "INSERT INTO sales (product_id, store, quantity, unit_price, total, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                                (product_match['id'], store, qty, price, qty * price, timestamp)
+                            )
+                            inserted += 1
+                    
+                    conn.commit()
+                    st.success(f"✅ Imported {inserted} sales records!")
+                    
+                    # Train immediately
+                    from engine import train_all_models, generate_forecast, save_forecast_to_db
+                    with st.spinner("Training AI on historical data..."):
+                        count = train_all_models()
+                        if count > 0:
+                            forecast = generate_forecast()
+                            save_forecast_to_db(forecast)
+                            st.success(f"🎉 AI trained on {count} models! Forecast ready.")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.warning("Imported data but need more date variety to train models.")
+        
+        except Exception as e:
+            st.error(f"Error reading CSV: {e}")
+
 # ---- Manual Retrain Button (always available) ----
 st.markdown("---")
 with st.expander("⚙️ Advanced: Manual Retrain"):

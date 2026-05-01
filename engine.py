@@ -40,7 +40,7 @@ def train_all_models():
             mask = (df['store'] == store) & (df['product'] == product)
             product_df = df[mask][['ds', 'y']].copy()
             
-            if len(product_df) < 5:
+            if len(product_df) < 3:
                 continue
             
             product_df['ds'] = pd.to_datetime(product_df['ds'])
