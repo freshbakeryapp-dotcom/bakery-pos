@@ -169,7 +169,7 @@ else:
         
         # ---- EVENING: Auto-Calculated Waste + Tagging ----
         st.subheader("🌆 End of Day: Review Waste")
-        st.caption("Sales are tracked automatically by the POS. Waste = Produced - Sold.")
+        st.caption("Sales are auto-tracked by POS. Split today's waste by reason.")
         
         today_str = today
         waste_items = []
@@ -184,46 +184,113 @@ else:
                 WHERE product_id = ? AND date(timestamp) = ?
             """, (item['product_id'], today_str)).fetchone()['total_sold']
             
-            waste = max(0, produced - sold_today)
+            total_waste = max(0, produced - sold_today)
             
-            cols = st.columns([2, 1, 1, 1, 2])
-            cols[0].write(f"**{item['product']}**")
-            cols[1].metric("Produced", produced)
-            cols[2].metric("Sold", sold_today)
-            cols[3].metric("Waste", waste)
+            st.markdown(f"#### {item['product']}")
+            cols = st.columns([1, 1, 1])
+            cols[0].metric("Produced", produced)
+            cols[1].metric("Sold", sold_today)
+            cols[2].metric("Total Waste", total_waste)
             
-            # Waste reason dropdown
-            reason = cols[4].selectbox(
-                "Reason",
-                ["overproduction", "kitchen accident", "damaged/dropped", "expired/stale", "other"],
-                key=f"reason_{item['item_id']}",
-                label_visibility="collapsed"
-            )
-            
-            waste_items.append({
-                'item_id': item['item_id'],
-                'product_id': item['product_id'],
-                'product': item['product'],
-                'produced': produced,
-                'sold': sold_today,
-                'waste': waste,
-                'reason': reason
-            })
+            if total_waste > 0:
+                st.caption(f"Split the {total_waste} wasted units by reason:")
+                
+                reason_cols = st.columns(5)
+                
+                overproduction = reason_cols[0].number_input(
+                    "Overproduction", min_value=0, max_value=total_waste, value=total_waste,
+                    key=f"overprod_{item['item_id']}", label_visibility="visible"
+                )
+                kitchen = reason_cols[1].number_input(
+                    "Kitchen accident", min_value=0, max_value=total_waste, value=0,
+                    key=f"kitchen_{item['item_id']}", label_visibility="visible"
+                )
+                damaged = reason_cols[2].number_input(
+                    "Damaged/dropped", min_value=0, max_value=total_waste, value=0,
+                    key=f"damaged_{item['item_id']}", label_visibility="visible"
+                )
+                expired = reason_cols[3].number_input(
+                    "Expired/stale", min_value=0, max_value=total_waste, value=0,
+                    key=f"expired_{item['item_id']}", label_visibility="visible"
+                )
+                other = reason_cols[4].number_input(
+                    "Other", min_value=0, max_value=total_waste, value=0,
+                    key=f"other_{item['item_id']}", label_visibility="visible"
+                )
+                
+                allocated = overproduction + kitchen + damaged + expired + other
+                if allocated != total_waste:
+                    st.warning(f"⚠️ Allocated ({allocated}) doesn't match total waste ({total_waste}). Please adjust.")
+                
+                # Store all waste entries
+                waste_breakdown = [
+                    ("overproduction", overproduction),
+                    ("kitchen accident", kitchen),
+                    ("damaged/dropped", damaged),
+                    ("expired/stale", expired),
+                    ("other", other),
+                ]
+                
+                for reason, qty in waste_breakdown:
+                    if qty > 0:
+                        waste_items.append({
+                            'item_id': item['item_id'],
+                            'product_id': item['product_id'],
+                            'product': item['product'],
+                            'produced': produced,
+                            'sold': sold_today,
+                            'waste_qty': qty,
+                            'reason': reason
+                        })
+            else:
+                # No waste
+                waste_items.append({
+                    'item_id': item['item_id'],
+                    'product_id': item['product_id'],
+                    'product': item['product'],
+                    'produced': produced,
+                    'sold': sold_today,
+                    'waste_qty': 0,
+                    'reason': 'none'
+                })
         
         if st.button("📋 Close Day & Log Waste", type="primary", key="close_day"):
-            for wi in waste_items:
-                # Update plan_item
+            # Update plan_items with totals
+            for item in items:
+                # Sum all waste for this item
+                item_waste_entries = [w for w in waste_items if w['item_id'] == item['item_id']]
+                total_w = sum(w['waste_qty'] for w in item_waste_entries)
+                total_s = item_waste_entries[0]['sold'] if item_waste_entries else 0
+                
+                # Find primary reason (the one with the most waste)
+                primary_reason = "overproduction"
+                max_qty = 0
+                for w in item_waste_entries:
+                    if w['waste_qty'] > max_qty:
+                        max_qty = w['waste_qty']
+                        primary_reason = w['reason']
+                
                 conn.execute(
                     "UPDATE plan_items SET actually_sold=?, wasted=?, waste_reason=? WHERE id=?",
-                    (wi['sold'], wi['waste'], wi['reason'], wi['item_id'])
+                    (total_s, total_w, primary_reason, item['item_id'])
                 )
-                # Log to waste_log
-                conn.execute(
-                    "INSERT INTO waste_log (plan_item_id, store, product_id, date, quantity, reason, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (wi['item_id'], "Store", wi['product_id'], today_str, wi['waste'], wi['reason'], '', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                )
+            
+            # Insert into waste_log
+            for wi in waste_items:
+                if wi['waste_qty'] > 0:
+                    conn.execute(
+                        "INSERT INTO waste_log (plan_item_id, store, product_id, date, quantity, reason, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (wi['item_id'], "Store", wi['product_id'], today_str, wi['waste_qty'], wi['reason'], '', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    )
+                else:
+                    # Log zero waste as "no waste"
+                    conn.execute(
+                        "INSERT INTO waste_log (plan_item_id, store, product_id, date, quantity, reason, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (wi['item_id'], "Store", wi['product_id'], today_str, 0, 'none', '', datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                    )
+            
             conn.commit()
-            st.success("✅ Day closed! Waste logged.")
+            st.success("✅ Day closed! Waste logged by reason.")
             st.balloons()
             st.rerun()
         
