@@ -262,6 +262,31 @@ else:
                 expired = item['expired_stale'] or 0
                 other = item['other_loss'] or 0
                 overproduction = item['wasted'] or 0
+
+            # Stockout detection summary
+            st.markdown("---")
+            st.subheader("🔍 Stockout Detection")
+            
+            stockout_check = conn.execute("""
+                SELECT pi.ai_recommended, pi.actually_produced, pi.actually_sold,
+                       p.name as product
+                FROM plan_items pi
+                JOIN products p ON pi.product_id = p.id
+                JOIN production_plans pp ON pi.plan_id = pp.id
+                WHERE pi.actually_sold IS NOT NULL AND pp.date = ?
+            """, (plan_date,)).fetchall()
+            
+            stockouts_today = []
+            for sc in stockout_check:
+                baked = sc['actually_produced'] or sc['ai_recommended']
+                sold = sc['actually_sold'] or 0
+                if sold >= baked and baked > 0:
+                    stockouts_today.append(sc['product'])
+            
+            if stockouts_today:
+                st.warning(f"⚠️ Possible stockouts today: {', '.join(stockouts_today)}. Sales matched or exceeded production — true demand may be higher. The model will correct for this in future forecasts.")
+            else:
+                st.success("✅ No stockouts detected today. Sales were below production.")
                 
                 st.markdown(f"#### {item['product']}")
                 cols = st.columns(6)
