@@ -13,7 +13,6 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Products table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +24,6 @@ def init_db():
         )
     """)
     
-    # Sales table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sales (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +37,6 @@ def init_db():
         )
     """)
     
-    # Production plans
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS production_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,7 +46,6 @@ def init_db():
         )
     """)
     
-    # Plan items
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS plan_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,14 +53,32 @@ def init_db():
             product_id INTEGER NOT NULL,
             ai_recommended INTEGER NOT NULL,
             baker_override INTEGER,
-            actually_sold INTEGER,
+            actually_produced INTEGER,
             wasted INTEGER,
+            waste_reason TEXT DEFAULT 'overproduction',
             FOREIGN KEY (plan_id) REFERENCES production_plans(id),
             FOREIGN KEY (product_id) REFERENCES products(id)
         )
     """)
     
-    # Seed some sample products
+    # Waste log with reasons
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS waste_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            plan_item_id INTEGER NOT NULL,
+            store TEXT NOT NULL,
+            product_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            quantity INTEGER NOT NULL,
+            reason TEXT NOT NULL DEFAULT 'overproduction',
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (plan_item_id) REFERENCES plan_items(id),
+            FOREIGN KEY (product_id) REFERENCES products(id)
+        )
+    """)
+    
+    # Seed products if empty
     sample_products = [
         ("Sourdough Loaf", "Bread", 4.50, 1.20, 24),
         ("Butter Croissant", "Pastry", 2.80, 0.60, 12),
@@ -85,4 +99,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Database initialized.")
+    print("Database initialized with waste tracking.")
