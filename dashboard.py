@@ -50,15 +50,15 @@ from datetime import datetime, timedelta
 last_train_time = conn.execute("SELECT MAX(created_at) as last_time FROM production_plans").fetchone()['last_time']
 
 should_auto_train = False
-# Debug: show training status
-st.sidebar.write(f"Hours since last train: {hours_since_train:.1f}" if last_train_time else "No training history")
 if last_train_time:
     last_train_dt = datetime.strptime(last_train_time, "%Y-%m-%d %H:%M:%S")
     hours_since_train = (datetime.now() - last_train_dt).total_seconds() / 3600
-    if hours_since_train > 20:  # Train if it's been more than 20 hours
+    if hours_since_train > 20:
         should_auto_train = True
+    st.sidebar.write(f"Hours since last train: {hours_since_train:.1f}")
 else:
-    should_auto_train = True  # Never trained before
+    should_auto_train = True
+    st.sidebar.write("No training history yet")
 
 if should_auto_train:
     date_count = conn.execute("SELECT COUNT(DISTINCT date(timestamp)) as cnt FROM sales").fetchone()['cnt']
