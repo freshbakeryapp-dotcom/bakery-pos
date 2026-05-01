@@ -131,6 +131,10 @@ if latest_plan:
 else:
     # No forecast exists
     st.warning("No forecast yet.")
+    # If we just trained models, reload to show forecast
+    if st.session_state.get('force_reload'):
+        st.session_state.force_reload = False
+        st.rerun()
     
     # ---- CSV Jumpstart ----
     st.markdown("---")
@@ -186,7 +190,8 @@ if 'raw_csv' in st.session_state and st.session_state.raw_csv is not None:
                 save_forecast_to_db(forecast)
                 st.success(f"🎉 AI trained on {count} models! Forecast ready.")
                 st.balloons()
-                st.session_state.raw_csv = None  # Clear after success
+                st.session_state.raw_csv = None
+                st.session_state.force_reload = True
                 st.rerun()
             else:
                 st.warning("Need more date variety. Upload a CSV with at least 3 different dates per product.")
