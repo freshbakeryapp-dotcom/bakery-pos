@@ -1,6 +1,7 @@
 import streamlit as st
 import sqlite3
 from datetime import datetime, timedelta
+import pandas as pd
 
 st.set_page_config(page_title="Bakery Dashboard", layout="wide")
 st.title("📊 Bakery AI Dashboard")
@@ -126,35 +127,23 @@ if latest_plan:
                 st.info("AI and baker performed equally.")
         else:
             st.info("Log waste above to see AI vs Baker comparison.")
-    
-    else:
-        st.info("No plan items found.")
-        st.button("🔄 Retrain Models Now", key="retrain_existing", on_click=None)
-        if st.session_state.get("retrain_existing"):
-            from engine import train_all_models, generate_forecast, save_forecast_to_db
-            count = train_all_models()
-            if count > 0:
-                forecast = generate_forecast()
-                save_forecast_to_db(forecast)
-                st.success(f"Trained {count} models!")
-                st.rerun()
 
 else:
+    # No forecast exists
     st.warning("No forecast yet.")
     
-    # CSV Jumpstart
+    # ---- CSV Jumpstart ----
     st.markdown("---")
     st.subheader("🚀 Jumpstart Your AI")
-    st.write("Upload your historical POS CSV to train the AI immediately.")
+    st.write("Upload your historical POS CSV to train the AI instantly.")
     
     csv_file = st.file_uploader("Upload Historical POS CSV", type=["csv"], key="historical_csv")
     
     if csv_file is not None:
-        import pandas as pd
         raw_df = pd.read_csv(csv_file)
         st.success(f"✅ {len(raw_df)} rows detected")
         
-        if st.button("📥 Import & Train AI", type="primary"):
+        if st.button("📥 Import Historical Data & Train AI", type="primary", key="import_btn"):
             inserted = 0
             for _, row in raw_df.iterrows():
                 product_name = str(row.get('product', '')).strip()
@@ -179,34 +168,33 @@ else:
             st.success(f"✅ Imported {inserted} sales records!")
             
             from engine import train_all_models, generate_forecast, save_forecast_to_db
-            with st.spinner("Training AI..."):
+            with st.spinner("Training AI on historical data..."):
                 count = train_all_models()
                 if count > 0:
                     forecast = generate_forecast()
                     save_forecast_to_db(forecast)
-                    st.success(f"🎉 Trained {count} models! Forecast ready.")
+                    st.success(f"🎉 AI trained on {count} models! Forecast ready.")
                     st.balloons()
                     st.rerun()
                 else:
-                    st.warning("Need more date variety. Try a CSV with at least 3 different dates.")
+                    st.warning("Need more date variety. Upload a CSV with at least 3 different dates per product.")
+                    st.info("Tip: The sample_pos_data.csv from Phase 1 works perfectly.")
 
-# Always-available retrain button
+# ---- Always-available Retrain Button ----
 st.markdown("---")
-retrain_col, _ = st.columns([1, 3])
-with retrain_col:
-    if st.button("🔄 Retrain Models", key="retrain_always"):
-        from engine import train_all_models, generate_forecast, save_forecast_to_db
-        with st.spinner("Training..."):
-            count = train_all_models()
-            if count > 0:
-                forecast = generate_forecast()
-                save_forecast_to_db(forecast)
-                st.success(f"Trained {count} models!")
-                st.rerun()
-            else:
-                st.error("Need more sales data (3+ different dates per product).")
+if st.button("🔄 Retrain Models Now", key="retrain_bottom"):
+    from engine import train_all_models, generate_forecast, save_forecast_to_db
+    with st.spinner("Training..."):
+        count = train_all_models()
+        if count > 0:
+            forecast = generate_forecast()
+            save_forecast_to_db(forecast)
+            st.success(f"✅ Trained {count} models! Forecast generated.")
+            st.rerun()
+        else:
+            st.error("Need more sales data. Import historical CSV or make more POS sales across different dates.")
 
-# Sidebar stats
+# Sidebar
 st.sidebar.subheader("📊 Quick Stats")
 total_sales = conn.execute("SELECT COUNT(*) as cnt FROM sales").fetchone()['cnt']
 total_revenue = conn.execute("SELECT COALESCE(SUM(total), 0) as rev FROM sales").fetchone()['rev']
