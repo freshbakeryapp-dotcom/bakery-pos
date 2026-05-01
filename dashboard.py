@@ -170,7 +170,7 @@ if latest_plan:
         st.info("No plan items found. Click 'Retrain Models Now' below.")
 else:
     st.warning("No forecast yet. Make sales in POS, then click below.")
-    if st.button("🔄 Retrain Models Now"):
+    if st.button("🔄 Retrain Models Now", key="retrain_manual"):
         from engine import train_all_models, generate_forecast, save_forecast_to_db
         with st.spinner("Training models from all sales data..."):
             count = train_all_models()
