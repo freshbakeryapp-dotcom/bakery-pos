@@ -28,11 +28,9 @@ def get_sales_data():
     if df.empty:
         return df
     
-    # Feature engineering
     from src.features import engineer_features
     df = engineer_features(df)
     
-    # Add weather
     from src.weather import merge_weather_with_sales
     df = merge_weather_with_sales(df)
     
@@ -59,6 +57,8 @@ def train_all_models():
             
             product_df['ds'] = pd.to_datetime(product_df['ds'])
             
+            has_weather = 'precipitation_mm' in df.columns and df['precipitation_mm'].notna().any()
+            
             try:
                 model = Prophet(
                     daily_seasonality=False,
@@ -68,9 +68,8 @@ def train_all_models():
                     interval_width=0.8,
                 )
                 
-                # Add weather regressor if available
-                has_weather = 'precipitation_mm' in product_df.columns and product_df['precipitation_mm'].notna().any()
                 if has_weather:
+                    product_df['precipitation_mm'] = df[mask]['precipitation_mm'].values
                     model.add_regressor('precipitation_mm')
                 
                 model.fit(product_df[['ds', 'y'] + (['precipitation_mm'] if has_weather else [])])
@@ -87,7 +86,7 @@ def train_all_models():
 
 
 def generate_forecast(target_date=None):
-    """Generate forecast. Uses historical average as fallback."""
+    """Generate forecast with P90, holiday adjustments, and weather."""
     if target_date is None:
         target_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     
@@ -106,9 +105,10 @@ def generate_forecast(target_date=None):
             yhat = None
             yhat_lower = None
             yhat_upper = None
+            p90_safe = None
             conf = 'Low'
+            holiday_note = ""
             
-            # Try model
             if os.path.exists(model_path):
                 try:
                     with open(model_path, 'rb') as f:
@@ -116,7 +116,6 @@ def generate_forecast(target_date=None):
                     
                     future = model.make_future_dataframe(periods=30)
                     
-                    # Add weather to future dates if model expects it
                     from src.weather import get_weather_for_period
                     future_dates = pd.Series(pd.to_datetime(future['ds'].unique()))
                     weather_future = get_weather_for_period(future_dates)
@@ -141,6 +140,7 @@ def generate_forecast(target_date=None):
                         yhat = max(0, round(row['yhat']))
                         yhat_lower = max(0, round(row['yhat_lower']))
                         yhat_upper = round(row['yhat_upper'])
+                        p90_safe = max(yhat, yhat_upper)
                         
                         if yhat > 0:
                             interval_width = yhat_upper - yhat_lower
@@ -152,7 +152,6 @@ def generate_forecast(target_date=None):
                 except Exception as e:
                     print(f"Model failed for {model_name}: {e}")
             
-            # Fallback: historical average
             if yhat is None:
                 mask = (df['store'] == store) & (df['product'] == product)
                 recent = df[mask].tail(7)
@@ -160,28 +159,39 @@ def generate_forecast(target_date=None):
                     yhat = round(recent['y'].mean())
                     yhat_lower = max(0, yhat - 10)
                     yhat_upper = yhat + 10
+                    p90_safe = yhat + max(5, int(yhat * 0.15))
                 else:
                     continue
+            
+            # Holiday adjustment
+            from src.holidays import apply_holiday_multiplier
+            adjusted_yhat, holiday_note, _ = apply_holiday_multiplier(yhat, target_date)
+            p90_safe = max(adjusted_yhat, p90_safe or adjusted_yhat)
             
             results.append({
                 'store': store,
                 'product': product,
-                'recommended': yhat,
+                'recommended': adjusted_yhat,
                 'confidence': conf,
                 'lower_bound': yhat_lower or max(0, yhat - 10),
                 'upper_bound': yhat_upper or yhat + 10,
+                'p90_safe': p90_safe,
+                'holiday_note': holiday_note,
             })
     
     return results
 
 
 def save_forecast_to_db(forecast_results, target_date=None):
-    """Save forecast to production_plans table."""
+    """Save forecast to production_plans table with P90 and event adjustments."""
     if target_date is None:
         target_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     
     conn = sqlite3.connect("bakery.db")
     conn.row_factory = sqlite3.Row
+    
+    from src.events import apply_event_adjustments
+    forecast_results, events = apply_event_adjustments(forecast_results, target_date)
     
     cursor = conn.execute(
         "INSERT INTO production_plans (store, date, created_at) VALUES (?, ?, ?)",
@@ -193,26 +203,19 @@ def save_forecast_to_db(forecast_results, target_date=None):
     for row in conn.execute("SELECT id, name FROM products"):
         product_map[row['name'].lower()] = row['id']
     
-    # Apply event adjustments
-    from src.events import apply_event_adjustments
-    forecast_results, events = apply_event_adjustments(forecast_results, target_date)
-    
-    # Apply event adjustments
-    from src.events import apply_event_adjustments
-    forecast_results, events = apply_event_adjustments(forecast_results, target_date)
-    
     for item in forecast_results:
         product_id = product_map.get(item['product'].lower())
-            # Try case-insensitive match
-        for name, pid in product_map.items():
+        if not product_id:
+            for name, pid in product_map.items():
                 if name.lower() == item['product'].lower():
                     product_id = pid
                     break
         
         if product_id:
+            p90 = item.get('p90_safe', item['recommended'])
             conn.execute(
-                "INSERT INTO plan_items (plan_id, product_id, ai_recommended) VALUES (?, ?, ?)",
-                (plan_id, product_id, item['recommended'])
+                "INSERT INTO plan_items (plan_id, product_id, ai_recommended, p90_safe) VALUES (?, ?, ?, ?)",
+                (plan_id, product_id, item['recommended'], p90)
             )
     
     conn.commit()

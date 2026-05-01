@@ -52,8 +52,14 @@ def init_db():
             plan_id INTEGER NOT NULL,
             product_id INTEGER NOT NULL,
             ai_recommended INTEGER NOT NULL,
+            p90_safe INTEGER DEFAULT 0,
             baker_override INTEGER,
             actually_produced INTEGER,
+            kitchen_accident INTEGER DEFAULT 0,
+            damaged_dropped INTEGER DEFAULT 0,
+            expired_stale INTEGER DEFAULT 0,
+            other_loss INTEGER DEFAULT 0,
+            actually_sold INTEGER,
             wasted INTEGER,
             waste_reason TEXT DEFAULT 'overproduction',
             FOREIGN KEY (plan_id) REFERENCES production_plans(id),
@@ -61,7 +67,6 @@ def init_db():
         )
     """)
     
-    # Waste log with reasons
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS waste_log (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,7 +94,7 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
-
+    
     # Seed products if empty
     sample_products = [
         ("Sourdough Loaf", "Bread", 4.50, 1.20, 24),
@@ -111,4 +116,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Database initialized with waste tracking.")
+    print("Database initialized.")

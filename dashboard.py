@@ -35,18 +35,18 @@ try:
 except:
     pass
 try:
-    conn.execute("SELECT actually_sold FROM plan_items LIMIT 1")
-except:
     conn.execute("ALTER TABLE plan_items ADD COLUMN actually_sold INTEGER")
+except:
+    pass
+try:
+    conn.execute("ALTER TABLE plan_items ADD COLUMN p90_safe INTEGER DEFAULT 0")
+except:
+    pass
 
 from db import init_db
 init_db()
 
-latest_plan = conn.execute("SELECT * FROM production_plans ORDER BY id DESC LIMIT 1").fetchone()
-
-# Auto-train check: if last plan is older than today, train automatically
-from datetime import datetime, timedelta
-
+# Auto-train check
 last_train_time = conn.execute("SELECT MAX(created_at) as last_time FROM production_plans").fetchone()['last_time']
 
 should_auto_train = False
@@ -70,13 +70,14 @@ if should_auto_train:
             save_forecast_to_db(forecast)
             st.sidebar.success(f"🔄 Auto-trained {count} models")
 
-
-# Show last train time in sidebar
 st.sidebar.markdown("---")
 if last_train_time:
     st.sidebar.caption(f"🕐 Last trained: {last_train_time}")
 else:
     st.sidebar.caption("🕐 Never trained")
+
+latest_plan = conn.execute("SELECT * FROM production_plans ORDER BY id DESC LIMIT 1").fetchone()
+
 # ============================================================
 # MODE 1: NO FORECAST
 # ============================================================
@@ -155,9 +156,25 @@ else:
         st.success(f"✅ Today's Plan — {plan_date}")
     elif plan_date == tomorrow:
         st.info(f"📋 Tomorrow's Plan — {plan_date}")
-            # Weather for forecast date
-    from src.weather import add_weather_to_forecast
-    # Add a small weather indicator
+    else:
+        st.warning(f"⚠️ Plan for {plan_date}")
+    
+    # Holiday alerts
+    from src.holidays import get_upcoming_holiday, get_holiday_proximity_features
+    
+    upcoming_hols = get_upcoming_holiday(plan_date, 14)
+    if upcoming_hols:
+        next_hol = upcoming_hols[0]
+        if next_hol['days_until'] <= 7:
+            st.info(f"📅 **{next_hol['name']}** in {next_hol['days_until']} days — pre-holiday demand expected")
+    
+    features = get_holiday_proximity_features(plan_date)
+    if features['is_holiday_today']:
+        st.warning(f"🎉 Today is {features['upcoming_holiday_name']} — expect reduced foot traffic")
+    elif features['is_ramadan']:
+        st.info("🌙 Ramadan period — afternoon demand pattern shifted")
+    
+    # Weather for forecast date
     try:
         from src.weather import get_weather_for_period
         target_dates = pd.Series([pd.to_datetime(plan_date)])
@@ -169,11 +186,9 @@ else:
                 st.warning(f"🌧️ Rain forecast: {rain:.1f}mm — foot traffic may be affected")
     except:
         pass
-    else:
-        st.warning(f"⚠️ Plan for {plan_date}")
     
     items = conn.execute("""
-        SELECT pi.id as item_id, pi.ai_recommended, pi.baker_override,
+        SELECT pi.id as item_id, pi.ai_recommended, pi.p90_safe, pi.baker_override,
                pi.actually_produced, pi.kitchen_accident, pi.damaged_dropped,
                pi.expired_stale, pi.other_loss, pi.wasted, pi.waste_reason,
                pi.actually_sold, p.name as product, p.id as product_id
@@ -184,7 +199,6 @@ else:
     """, (latest_plan['id'],)).fetchall()
     
     if items:
-        # Check if production has been confirmed
         production_confirmed = any(item['actually_produced'] is not None and item['actually_produced'] > 0 for item in items)
         day_closed = any(item['actually_sold'] is not None for item in items)
         
@@ -198,8 +212,12 @@ else:
             for item in items:
                 cols = st.columns([2, 1, 1])
                 cols[0].write(f"**{item['product']}**")
-                cols[1].metric("AI Rec", item['ai_recommended'])
-                default_override = item['baker_override'] if item['baker_override'] else item['ai_recommended']
+                ai_rec = item['ai_recommended']
+                p90 = item['p90_safe'] or ai_rec
+                cols[1].metric("AI Rec", ai_rec)
+                if p90 > ai_rec:
+                    cols[1].caption(f"🛡️ Safe: {p90}")
+                default_override = item['baker_override'] if item['baker_override'] else ai_rec
                 override = cols[2].number_input("Bake", value=default_override, min_value=0, max_value=500,
                     key=f"bake_{item['item_id']}", label_visibility="collapsed")
             
@@ -227,7 +245,6 @@ else:
             for item in items:
                 produced = item['actually_produced'] or (item['baker_override'] or item['ai_recommended'])
                 
-                # Auto-count sales from POS
                 sold_today = conn.execute("""
                     SELECT COALESCE(SUM(quantity), 0) as total_sold
                     FROM sales WHERE product_id = ? AND date(timestamp) = ?
@@ -264,7 +281,6 @@ else:
                     expired_val = st.session_state.get(f"expired_{item['item_id']}", 0)
                     other_val = st.session_state.get(f"other_{item['item_id']}", 0)
                     
-                    # Overproduction = Produced - Accidents - Damage - Expired - Other - Sales
                     overproduction = max(0, produced - kitchen_val - damaged_val - expired_val - other_val - sold_today)
                     
                     conn.execute("""
@@ -274,7 +290,6 @@ else:
                         WHERE id=?
                     """, (sold_today, kitchen_val, damaged_val, expired_val, other_val, overproduction, item['item_id']))
                     
-                    # Log each loss type to waste_log
                     loss_types = [
                         ("kitchen accident", kitchen_val),
                         ("damaged/dropped", damaged_val),
@@ -309,14 +324,22 @@ else:
                 expired = item['expired_stale'] or 0
                 other = item['other_loss'] or 0
                 overproduction = item['wasted'] or 0
-
-            # Stockout detection summary
-            st.markdown("---")
-            st.subheader("🔍 Stockout Detection")
+                
+                st.markdown(f"#### {item['product']}")
+                cols = st.columns(6)
+                cols[0].metric("Produced", produced)
+                cols[1].metric("Sold", sold)
+                cols[2].metric("Kitchen", kitchen)
+                cols[3].metric("Damaged", damaged)
+                cols[4].metric("Expired", expired)
+                cols[5].metric("Overproduction", overproduction)
             
+            st.markdown("---")
+            
+            # Stockout detection
+            st.subheader("🔍 Stockout Detection")
             stockout_check = conn.execute("""
-                SELECT pi.ai_recommended, pi.actually_produced, pi.actually_sold,
-                       p.name as product
+                SELECT pi.ai_recommended, pi.actually_produced, pi.actually_sold, p.name as product
                 FROM plan_items pi
                 JOIN products p ON pi.product_id = p.id
                 JOIN production_plans pp ON pi.plan_id = pp.id
@@ -331,18 +354,9 @@ else:
                     stockouts_today.append(sc['product'])
             
             if stockouts_today:
-                st.warning(f"⚠️ Possible stockouts today: {', '.join(stockouts_today)}. Sales matched or exceeded production — true demand may be higher. The model will correct for this in future forecasts.")
+                st.warning(f"⚠️ Possible stockouts today: {', '.join(stockouts_today)}. Sales matched or exceeded production — true demand may be higher.")
             else:
-                st.success("✅ No stockouts detected today. Sales were below production.")
-                
-                st.markdown(f"#### {item['product']}")
-                cols = st.columns(6)
-                cols[0].metric("Produced", produced)
-                cols[1].metric("Sold", sold)
-                cols[2].metric("Kitchen", kitchen)
-                cols[3].metric("Damaged", damaged)
-                cols[4].metric("Expired", expired)
-                cols[5].metric("Overproduction", overproduction)
+                st.success("✅ No stockouts detected today.")
             
             st.markdown("---")
             st.subheader("📊 AI vs Baker Performance")
@@ -383,6 +397,7 @@ else:
                 st.rerun()
 
 # ---- Sidebar ----
+st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Quick Stats")
 total_sales = conn.execute("SELECT COUNT(*) as cnt FROM sales").fetchone()['cnt']
 total_revenue = conn.execute("SELECT COALESCE(SUM(total), 0) as rev FROM sales").fetchone()['rev']
@@ -396,24 +411,20 @@ st.sidebar.metric("Total Waste", total_waste)
 st.sidebar.metric("Overproduction", overproduction_waste)
 st.sidebar.metric("Accidents/Other", accident_waste)
 
-# ---- Events in Sidebar ----
 st.sidebar.markdown("---")
 st.sidebar.subheader("📅 Local Events")
-
 from src.events import get_events_for_date, add_event, delete_event, get_upcoming_events
 
-# Show upcoming events
 upcoming = get_upcoming_events(7)
 if upcoming:
     st.sidebar.write("**Upcoming:**")
-    for ev in upcoming[:5]:  # Show max 5
+    for ev in upcoming[:5]:
         impact_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(ev['expected_impact'], "🟡")
-    desc = ev['description'] if ev['description'] else ''
-    st.sidebar.caption(f"{impact_emoji} {ev['date']}: {ev['event_type'].replace('_',' ').title()} - {desc[:20]}")
-# Add event form
+        desc = ev['description'] if ev['description'] else ''
+        st.sidebar.caption(f"{impact_emoji} {ev['date']}: {ev['event_type'].replace('_',' ').title()} - {desc[:20]}")
+
 st.sidebar.markdown("---")
 st.sidebar.write("**Add Event:**")
-
 ev_date = st.sidebar.date_input("Date", key="ev_date_sidebar")
 ev_type = st.sidebar.selectbox("Type", 
     ["nearby_event", "construction", "school_activity", "promotion", "holiday_local", "other"],
@@ -424,11 +435,13 @@ ev_desc = st.sidebar.text_input("Description", key="ev_desc_sidebar", placeholde
 
 if st.sidebar.button("➕ Add Event", key="add_event_sidebar"):
     try:
-        from src.events import add_event
         add_event("Store", ev_date.strftime("%Y-%m-%d"), ev_type, ev_desc, ev_impact)
         st.sidebar.success(f"✅ Added for {ev_date}!")
         st.rerun()
     except Exception as e:
         st.sidebar.error(f"Failed: {e}")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("🔄 Auto-train runs daily at 5am BNT")
 
 conn.close()
