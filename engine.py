@@ -79,60 +79,46 @@ def generate_forecast(target_date=None):
     
     for store in df['store'].unique():
         for product in df['product'].unique():
-            model_name = f"{store}_{product}".replace(" ", "_").lower()
+            model_name = f"{store}_{product}".replace(" ", "_").replace("/", "_").lower()
             model_path = os.path.join(MODELS_DIR, f"{model_name}.pkl")
             
-            if not os.path.exists(model_path):
+            yhat = None
+            
+            # Try loading model
+            if os.path.exists(model_path):
+                try:
+                    with open(model_path, 'rb') as f:
+                        model = pickle.load(f)
+                    
+                    future = model.make_future_dataframe(periods=30)
+                    forecast = model.predict(future)
+                    
+                    forecast['ds'] = forecast['ds'].dt.strftime("%Y-%m-%d")
+                    match = forecast[forecast['ds'] == target_date]
+                    
+                    if not match.empty:
+                        row = match.iloc[0]
+                        yhat = max(0, round(row['yhat']))
+                except Exception as e:
+                    print(f"Model load failed for {model_name}: {e}")
+            
+            # Fallback: use historical average
+            if yhat is None:
                 mask = (df['store'] == store) & (df['product'] == product)
                 recent = df[mask].tail(7)
                 if len(recent) > 0:
-                    avg = round(recent['y'].mean())
-                    results.append({
-                        'store': store,
-                        'product': product,
-                        'recommended': avg,
-                        'confidence': 'Low',
-                        'lower_bound': max(0, avg - 10),
-                        'upper_bound': avg + 10,
-                    })
-                continue
-            
-            try:
-                with open(model_path, 'rb') as f:
-                    model = pickle.load(f)
-                
-                future = model.make_future_dataframe(periods=30)
-                forecast = model.predict(future)
-                
-                forecast['ds'] = forecast['ds'].dt.strftime("%Y-%m-%d")
-                match = forecast[forecast['ds'] == target_date]
-                
-                if match.empty:
-                    continue
-                
-                row = match.iloc[0]
-                yhat = max(0, round(row['yhat']))
-                yhat_lower = max(0, round(row['yhat_lower']))
-                yhat_upper = round(row['yhat_upper'])
-                
-                interval_width = yhat_upper - yhat_lower
-                if yhat > 0 and interval_width / yhat < 0.5:
-                    conf = 'High'
-                elif yhat > 0 and interval_width / yhat < 1.0:
-                    conf = 'Medium'
+                    yhat = round(recent['y'].mean())
                 else:
-                    conf = 'Low'
-                
-                results.append({
-                    'store': store,
-                    'product': product,
-                    'recommended': yhat,
-                    'confidence': conf,
-                    'lower_bound': yhat_lower,
-                    'upper_bound': yhat_upper,
-                })
-            except Exception as e:
-                print(f"Forecast failed: {store} - {product}: {e}")
+                    continue
+            
+            results.append({
+                'store': store,
+                'product': product,
+                'recommended': yhat,
+                'confidence': 'Low',
+                'lower_bound': max(0, yhat - 10),
+                'upper_bound': yhat + 10,
+            })
     
     return results
 
