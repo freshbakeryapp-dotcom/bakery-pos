@@ -8,9 +8,23 @@ st.title("📊 Bakery AI Dashboard")
 
 conn = sqlite3.connect("bakery.db")
 conn.row_factory = sqlite3.Row
-
+# Migrate old database schema
+try:
+    conn.execute("ALTER TABLE plan_items ADD COLUMN actually_produced INTEGER")
+except:
+    pass
+try:
+    conn.execute("ALTER TABLE plan_items ADD COLUMN waste_reason TEXT DEFAULT 'overproduction'")
+except:
+    pass
+try:
+    conn.execute("SELECT actually_sold FROM plan_items LIMIT 1")
+except:
+    conn.execute("ALTER TABLE plan_items ADD COLUMN actually_sold INTEGER")
 latest_plan = conn.execute("SELECT * FROM production_plans ORDER BY id DESC LIMIT 1").fetchone()
 
+from db import init_db
+init_db()
 # ============================================================
 # MODE 1: NO FORECAST — Setup
 # ============================================================
