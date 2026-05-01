@@ -363,4 +363,39 @@ st.sidebar.metric("Total Waste", total_waste)
 st.sidebar.metric("Overproduction", overproduction_waste)
 st.sidebar.metric("Accidents/Other", accident_waste)
 
+# ---- Events in Sidebar ----
+st.sidebar.markdown("---")
+st.sidebar.subheader("📅 Local Events")
+
+from src.events import get_events_for_date, add_event, delete_event, get_upcoming_events
+
+# Show upcoming events
+upcoming = get_upcoming_events(7)
+if upcoming:
+    st.sidebar.write("**Upcoming:**")
+    for ev in upcoming[:5]:  # Show max 5
+        impact_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(ev['expected_impact'], "🟡")
+        st.sidebar.caption(f"{impact_emoji} {ev['date']}: {ev['event_type'].replace('_',' ').title()} - {ev.get('description','')[:20]}")
+
+# Add event form
+st.sidebar.markdown("---")
+st.sidebar.write("**Add Event:**")
+
+ev_date = st.sidebar.date_input("Date", key="ev_date_sidebar")
+ev_type = st.sidebar.selectbox("Type", 
+    ["nearby_event", "construction", "school_activity", "promotion", "holiday_local", "other"],
+    key="ev_type_sidebar"
+)
+ev_impact = st.sidebar.selectbox("Impact", ["low", "medium", "high"], key="ev_impact_sidebar")
+ev_desc = st.sidebar.text_input("Description", key="ev_desc_sidebar", placeholder="e.g., School sports day")
+
+if st.sidebar.button("➕ Add Event", key="add_event_sidebar"):
+    try:
+        from src.events import add_event
+        add_event("Store", ev_date.strftime("%Y-%m-%d"), ev_type, ev_desc, ev_impact)
+        st.sidebar.success(f"✅ Added for {ev_date}!")
+        st.rerun()
+    except Exception as e:
+        st.sidebar.error(f"Failed: {e}")
+
 conn.close()
