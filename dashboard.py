@@ -141,10 +141,21 @@ else:
     
     if csv_file is not None:
         raw_df = pd.read_csv(csv_file)
-        st.success(f"✅ {len(raw_df)} rows detected")
         
-        if st.button("📥 Import Historical Data & Train AI", type="primary", key="import_btn"):
-            inserted = 0
+        # Store in session state so it survives reruns
+        st.session_state.raw_csv = raw_df
+        
+        st.success(f"✅ {len(raw_df)} rows detected")
+        st.write("Preview:")
+        st.dataframe(raw_df.head(5))
+
+# Process the import if data is stored
+if 'raw_csv' in st.session_state and st.session_state.raw_csv is not None:
+    if st.button("📥 Import Historical Data & Train AI", type="primary", key="import_btn"):
+        raw_df = st.session_state.raw_csv
+        inserted = 0
+        
+        with st.spinner("Importing sales data..."):
             for _, row in raw_df.iterrows():
                 product_name = str(row.get('product', '')).strip()
                 product_match = conn.execute(
@@ -163,22 +174,22 @@ else:
                         (product_match['id'], store, qty, price, qty * price, f"{date_val} 10:00:00")
                     )
                     inserted += 1
-            
-            conn.commit()
-            st.success(f"✅ Imported {inserted} sales records!")
-            
-            from engine import train_all_models, generate_forecast, save_forecast_to_db
-            with st.spinner("Training AI on historical data..."):
-                count = train_all_models()
-                if count > 0:
-                    forecast = generate_forecast()
-                    save_forecast_to_db(forecast)
-                    st.success(f"🎉 AI trained on {count} models! Forecast ready.")
-                    st.balloons()
-                    st.rerun()
-                else:
-                    st.warning("Need more date variety. Upload a CSV with at least 3 different dates per product.")
-                    st.info("Tip: The sample_pos_data.csv from Phase 1 works perfectly.")
+        
+        conn.commit()
+        st.success(f"✅ Imported {inserted} sales records!")
+        
+        from engine import train_all_models, generate_forecast, save_forecast_to_db
+        with st.spinner("Training AI on historical data..."):
+            count = train_all_models()
+            if count > 0:
+                forecast = generate_forecast()
+                save_forecast_to_db(forecast)
+                st.success(f"🎉 AI trained on {count} models! Forecast ready.")
+                st.balloons()
+                st.session_state.raw_csv = None  # Clear after success
+                st.rerun()
+            else:
+                st.warning("Need more date variety. Upload a CSV with at least 3 different dates per product.")
 
 # ---- Always-available Retrain Button ----
 st.markdown("---")
