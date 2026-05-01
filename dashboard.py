@@ -385,7 +385,18 @@ else:
                     st.warning(f"⚠️ Baker better by {abs(int(improvement))} units")
                 else:
                     st.info("Equal.")
-    
+
+            st.markdown("---")
+            if st.button("🔄 Retrain Models", key="retrain_summary"):
+                from engine import train_all_models, generate_forecast, save_forecast_to_db
+                with st.spinner("Training..."):
+                    count = train_all_models()
+                    if count > 0:
+                        forecast = generate_forecast()
+                        save_forecast_to_db(forecast)
+                        st.success(f"✅ Trained {count} models!")
+                        st.rerun()
+
     else:
         st.info("Plan has no items.")
         if st.button("🔄 Retrain Models", key="retrain_items"):
