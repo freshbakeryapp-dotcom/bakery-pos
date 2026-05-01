@@ -14,10 +14,7 @@ store_list = [s['store'] for s in stores]
 selected_store = st.selectbox("📍 Filter by Store", ["All Stores"] + store_list)
 
 # ---- Latest Forecast ----
-latest_plan = conn.execute("""
-    SELECT * FROM production_plans 
-    ORDER BY id DESC LIMIT 1
-""").fetchone()
+latest_plan = conn.execute("SELECT * FROM production_plans ORDER BY id DESC LIMIT 1").fetchone()
 
 if latest_plan:
     plan_date = latest_plan['date']
@@ -33,13 +30,8 @@ if latest_plan:
     
     items = conn.execute("""
         SELECT 
-            pi.id as item_id,
-            pi.ai_recommended,
-            pi.baker_override,
-            pi.actually_sold,
-            pi.wasted,
-            p.name as product,
-            p.id as product_id
+            pi.id as item_id, pi.ai_recommended, pi.baker_override,
+            pi.actually_sold, pi.wasted, p.name as product
         FROM plan_items pi
         JOIN products p ON pi.product_id = p.id
         WHERE pi.plan_id = ?
@@ -52,7 +44,7 @@ if latest_plan:
         cols = st.columns([2, 1, 1, 1, 1])
         cols[0].markdown("**Product**")
         cols[1].markdown("**AI Rec**")
-        cols[2].markdown("**Your Override**")
+        cols[2].markdown("**Override**")
         cols[3].markdown("**Sold**")
         cols[4].markdown("**Wasted**")
         
@@ -65,26 +57,16 @@ if latest_plan:
             cols[0].write(item['product'])
             cols[1].write(str(item['ai_recommended']))
             
-            # Override input
             default_override = item['baker_override'] if item['baker_override'] else item['ai_recommended']
             override = cols[2].number_input(
-                "override",
-                value=default_override,
-                min_value=0,
-                max_value=500,
-                key=f"override_{item['item_id']}",
-                label_visibility="collapsed"
+                "override", value=default_override, min_value=0, max_value=500,
+                key=f"ov_{item['item_id']}", label_visibility="collapsed"
             )
             
-            # Sold input (waste logging)
             sold_default = item['actually_sold'] if item['actually_sold'] else override
             sold = cols[3].number_input(
-                "sold",
-                value=sold_default,
-                min_value=0,
-                max_value=override,
-                key=f"sold_{item['item_id']}",
-                label_visibility="collapsed"
+                "sold", value=sold_default, min_value=0, max_value=override,
+                key=f"sl_{item['item_id']}", label_visibility="collapsed"
             )
             
             wasted = override - sold
@@ -100,39 +82,26 @@ if latest_plan:
         col2.metric("Total Sold", total_sold)
         col3.metric("Total Wasted", total_wasted)
         
-        # Save overrides AND waste log
         if st.button("💾 Save Overrides & Log Waste", type="primary"):
             for item in items:
-                override_key = f"override_{item['item_id']}"
-                sold_key = f"sold_{item['item_id']}"
-                
-                override_val = st.session_state.get(override_key, item['ai_recommended'])
-                sold_val = st.session_state.get(sold_key, override_val)
-                wasted_val = override_val - sold_val
-                
-                conn.execute("""
-                    UPDATE plan_items 
-                    SET baker_override = ?, actually_sold = ?, wasted = ?
-                    WHERE id = ?
-                """, (override_val, sold_val, wasted_val, item['item_id']))
-            
+                ov_val = st.session_state.get(f"ov_{item['item_id']}", item['ai_recommended'])
+                sl_val = st.session_state.get(f"sl_{item['item_id']}", ov_val)
+                w_val = ov_val - sl_val
+                conn.execute(
+                    "UPDATE plan_items SET baker_override=?, actually_sold=?, wasted=? WHERE id=?",
+                    (ov_val, sl_val, w_val, item['item_id'])
+                )
             conn.commit()
-            st.success("✅ Overrides and waste logged!")
+            st.success("✅ Saved!")
             st.balloons()
             st.rerun()
         
-        # ---- AI vs Baker Comparison ----
+        # AI vs Baker comparison
         st.markdown("---")
         st.subheader("📊 AI vs Baker Performance")
         
-        # All historical data
         history = conn.execute("""
-            SELECT 
-                pi.ai_recommended,
-                pi.baker_override,
-                pi.actually_sold,
-                pi.wasted,
-                pp.date
+            SELECT pi.ai_recommended, pi.baker_override, pi.actually_sold, pi.wasted, pp.date
             FROM plan_items pi
             JOIN production_plans pp ON pi.plan_id = pp.id
             WHERE pi.actually_sold IS NOT NULL
@@ -140,25 +109,17 @@ if latest_plan:
         """).fetchall()
         
         if history:
-            total_ai_waste = 0
-            total_baker_waste = 0
-            total_days = len(set(h['date'] for h in history))
-            
-            for h in history:
-                baked = h['baker_override'] if h['baker_override'] else h['ai_recommended']
-                sold = h['actually_sold'] if h['actually_sold'] else 0
-                ai_waste = max(0, h['ai_recommended'] - sold)
-                baker_waste = h['wasted'] if h['wasted'] else 0
-                total_ai_waste += ai_waste
-                total_baker_waste += baker_waste
+            ai_waste_total = sum(max(0, h['ai_recommended'] - (h['actually_sold'] or 0)) for h in history)
+            baker_waste_total = sum(h['wasted'] or 0 for h in history)
+            days = len(set(h['date'] for h in history))
             
             col1, col2 = st.columns(2)
-            col1.metric("🤖 AI Estimated Waste", int(total_ai_waste))
-            col2.metric("👨‍🍳 Baker Actual Waste", int(total_baker_waste))
+            col1.metric("🤖 AI Estimated Waste", int(ai_waste_total))
+            col2.metric("👨‍🍳 Baker Actual Waste", int(baker_waste_total))
             
-            improvement = total_baker_waste - total_ai_waste
+            improvement = baker_waste_total - ai_waste_total
             if improvement > 0:
-                st.success(f"✅ Over {total_days} day(s), AI would have reduced waste by **{int(improvement)} units**")
+                st.success(f"✅ Over {days} day(s), AI would have reduced waste by **{int(improvement)} units**")
             elif improvement < 0:
                 st.warning(f"⚠️ Baker performed better by {abs(int(improvement))} units")
             else:
@@ -167,117 +128,89 @@ if latest_plan:
             st.info("Log waste above to see AI vs Baker comparison.")
     
     else:
-        st.info("No plan items found. Click 'Retrain Models Now' below.")
-else:
-    st.warning("No forecast yet. Make sales in POS, then click below.")
-    if st.button("🔄 Retrain Models Now", key="retrain_manual"):
-        from engine import train_all_models, generate_forecast, save_forecast_to_db
-        with st.spinner("Training models from all sales data..."):
+        st.info("No plan items found.")
+        st.button("🔄 Retrain Models Now", key="retrain_existing", on_click=None)
+        if st.session_state.get("retrain_existing"):
+            from engine import train_all_models, generate_forecast, save_forecast_to_db
             count = train_all_models()
             if count > 0:
-                st.success(f"Trained {count} models!")
                 forecast = generate_forecast()
                 save_forecast_to_db(forecast)
-                st.success("Forecast generated!")
+                st.success(f"Trained {count} models!")
                 st.rerun()
-            else:
-                st.error("Need more sales data to train models.")
 
-# ---- CSV Jumpstart for new bakeries ----
-if not latest_plan:
+else:
+    st.warning("No forecast yet.")
+    
+    # CSV Jumpstart
     st.markdown("---")
     st.subheader("🚀 Jumpstart Your AI")
-    st.write("Upload your historical POS sales CSV to train the AI immediately. After 5+ days of live sales, this won't be needed anymore.")
+    st.write("Upload your historical POS CSV to train the AI immediately.")
     
     csv_file = st.file_uploader("Upload Historical POS CSV", type=["csv"], key="historical_csv")
     
     if csv_file is not None:
         import pandas as pd
+        raw_df = pd.read_csv(csv_file)
+        st.success(f"✅ {len(raw_df)} rows detected")
         
-        try:
-            raw_df = pd.read_csv(csv_file)
-            st.success(f"✅ {len(raw_df)} rows detected")
+        if st.button("📥 Import & Train AI", type="primary"):
+            inserted = 0
+            for _, row in raw_df.iterrows():
+                product_name = str(row.get('product', '')).strip()
+                product_match = conn.execute(
+                    "SELECT id, price FROM products WHERE LOWER(name) = LOWER(?)",
+                    (product_name,)
+                ).fetchone()
+                
+                if product_match:
+                    store = str(row.get('store', 'Gadong')).strip()
+                    qty = int(row.get('quantity_sold', row.get('qty', row.get('quantity', 1))))
+                    price = float(row.get('unit_price', row.get('price', product_match['price'])))
+                    date_val = str(row['date']).strip()
+                    
+                    conn.execute(
+                        "INSERT INTO sales (product_id, store, quantity, unit_price, total, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                        (product_match['id'], store, qty, price, qty * price, f"{date_val} 10:00:00")
+                    )
+                    inserted += 1
             
-            # Basic validation
-            if 'date' not in raw_df.columns or 'product' not in raw_df.columns:
-                st.error("CSV must have 'date', 'product', 'store', and 'quantity_sold' columns.")
-            else:
-                if st.button("📥 Import Historical Data & Train AI", type="primary"):
-                    # Map CSV columns and insert into sales table
-                    inserted = 0
-                    for _, row in raw_df.iterrows():
-                        # Find product ID
-                        product_name = str(row.get('product', '')).strip()
-                        product_match = conn.execute(
-                            "SELECT id, price FROM products WHERE LOWER(name) = LOWER(?)", 
-                            (product_name,)
-                        ).fetchone()
-                        
-                        if product_match:
-                            store = str(row.get('store', 'Gadong')).strip()
-                            qty = int(row.get('quantity_sold', row.get('qty', row.get('quantity', 1))))
-                            price = float(row.get('unit_price', row.get('price', product_match['price'])))
-                            date_val = str(row['date']).strip()
-                            timestamp = f"{date_val} 10:00:00"
-                            
-                            conn.execute(
-                                "INSERT INTO sales (product_id, store, quantity, unit_price, total, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                                (product_match['id'], store, qty, price, qty * price, timestamp)
-                            )
-                            inserted += 1
-                    
-                    conn.commit()
-                    st.success(f"✅ Imported {inserted} sales records!")
-                    
-                    # DEBUG: Check what was imported
-                    date_check = conn.execute("""
-                        SELECT date(timestamp) as sale_date, COUNT(*) as cnt 
-                        FROM sales 
-                        GROUP BY sale_date 
-                        ORDER BY sale_date
-                    """).fetchall()
-                    st.write(f"**Dates after import: {len(date_check)}**")
-                    for d in date_check:
-                        st.write(f"{d['sale_date']}: {d['cnt']} sales")
+            conn.commit()
+            st.success(f"✅ Imported {inserted} sales records!")
+            
+            from engine import train_all_models, generate_forecast, save_forecast_to_db
+            with st.spinner("Training AI..."):
+                count = train_all_models()
+                if count > 0:
+                    forecast = generate_forecast()
+                    save_forecast_to_db(forecast)
+                    st.success(f"🎉 Trained {count} models! Forecast ready.")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.warning("Need more date variety. Try a CSV with at least 3 different dates.")
 
-                    # Train immediately
-                    from engine import train_all_models, generate_forecast, save_forecast_to_db
-                    with st.spinner("Training AI on historical data..."):
-                        count = train_all_models()
-                        if count > 0:
-                            forecast = generate_forecast()
-                            save_forecast_to_db(forecast)
-                            st.success(f"🎉 AI trained on {count} models! Forecast ready.")
-                            st.balloons()
-                            st.rerun()
-                        else:
-                            st.warning("Imported data but need more date variety to train models.")
-        
-        except Exception as e:
-            st.error(f"Error reading CSV: {e}")
-
-# ---- Manual Retrain Button (always available) ----
+# Always-available retrain button
 st.markdown("---")
-with st.expander("⚙️ Advanced: Manual Retrain"):
-    if st.button("🔄 Retrain Models Now"):
+retrain_col, _ = st.columns([1, 3])
+with retrain_col:
+    if st.button("🔄 Retrain Models", key="retrain_always"):
         from engine import train_all_models, generate_forecast, save_forecast_to_db
         with st.spinner("Training..."):
             count = train_all_models()
             if count > 0:
-                st.success(f"Trained {count} models")
                 forecast = generate_forecast()
                 save_forecast_to_db(forecast)
+                st.success(f"Trained {count} models!")
                 st.rerun()
             else:
-                st.error("Need more sales data.")
+                st.error("Need more sales data (3+ different dates per product).")
 
-# ---- Sidebar Stats ----
+# Sidebar stats
 st.sidebar.subheader("📊 Quick Stats")
 total_sales = conn.execute("SELECT COUNT(*) as cnt FROM sales").fetchone()['cnt']
 total_revenue = conn.execute("SELECT COALESCE(SUM(total), 0) as rev FROM sales").fetchone()['rev']
-total_products = conn.execute("SELECT COUNT(*) as cnt FROM products").fetchone()['cnt']
 st.sidebar.metric("Total Sales", total_sales)
 st.sidebar.metric("Total Revenue", f"${total_revenue:.2f}")
-st.sidebar.metric("Products", total_products)
 
 conn.close()
