@@ -122,6 +122,20 @@ else:
         st.success(f"✅ Today's Plan — {plan_date}")
     elif plan_date == tomorrow:
         st.info(f"📋 Tomorrow's Plan — {plan_date}")
+            # Weather for forecast date
+    from src.weather import add_weather_to_forecast
+    # Add a small weather indicator
+    try:
+        from src.weather import get_weather_for_period
+        target_dates = pd.Series([pd.to_datetime(plan_date)])
+        weather = get_weather_for_period(target_dates)
+        if not weather.empty:
+            rain = weather.iloc[0].get('precipitation_mm', 0)
+            is_rainy = weather.iloc[0].get('is_rainy', False)
+            if is_rainy:
+                st.warning(f"🌧️ Rain forecast: {rain:.1f}mm — foot traffic may be affected")
+    except:
+        pass
     else:
         st.warning(f"⚠️ Plan for {plan_date}")
     

@@ -32,6 +32,10 @@ def get_sales_data():
     from src.features import engineer_features
     df = engineer_features(df)
     
+    # Add weather
+    from src.weather import merge_weather_with_sales
+    df = merge_weather_with_sales(df)
+    
     return df
 
 
@@ -63,7 +67,13 @@ def train_all_models():
                     changepoint_prior_scale=0.05,
                     interval_width=0.8,
                 )
-                model.fit(product_df)
+                
+                # Add weather regressor if available
+                has_weather = 'precipitation_mm' in product_df.columns and product_df['precipitation_mm'].notna().any()
+                if has_weather:
+                    model.add_regressor('precipitation_mm')
+                
+                model.fit(product_df[['ds', 'y'] + (['precipitation_mm'] if has_weather else [])])
                 
                 model_name = f"{store}_{product}".replace(" ", "_").lower()
                 with open(os.path.join(MODELS_DIR, f"{model_name}.pkl"), 'wb') as f:
@@ -105,6 +115,22 @@ def generate_forecast(target_date=None):
                         model = pickle.load(f)
                     
                     future = model.make_future_dataframe(periods=30)
+                    
+                    # Add weather to future dates if model expects it
+                    from src.weather import get_weather_for_period
+                    future_dates = pd.Series(pd.to_datetime(future['ds'].unique()))
+                    weather_future = get_weather_for_period(future_dates)
+                    
+                    if not weather_future.empty and 'precipitation_mm' in weather_future.columns:
+                        weather_future['date'] = pd.to_datetime(weather_future['date'])
+                        future['ds_date'] = pd.to_datetime(future['ds'])
+                        future = future.merge(
+                            weather_future[['date', 'precipitation_mm']],
+                            left_on='ds_date', right_on='date', how='left'
+                        )
+                        future['precipitation_mm'] = future['precipitation_mm'].fillna(0)
+                        future = future.drop(columns=['ds_date', 'date'], errors='ignore')
+                    
                     forecast = model.predict(future)
                     
                     forecast['ds'] = forecast['ds'].dt.strftime("%Y-%m-%d")
