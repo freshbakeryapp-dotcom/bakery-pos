@@ -34,8 +34,9 @@ def get_sales_data():
     
     return df
 
+
 def train_all_models():
-    """Train one Prophet model per product per store. Returns count of models trained."""
+    """Train one Prophet model per product per store."""
     df = get_sales_data()
     
     if df.empty:
@@ -54,14 +55,6 @@ def train_all_models():
             
             product_df['ds'] = pd.to_datetime(product_df['ds'])
             
-            # Add lagged features as regressors
-            if 'y_lag_1' in product_df.columns:
-                product_df['lag_1'] = product_df['y_lag_1']
-                product_df['lag_7'] = product_df['y_lag_7']
-            else:
-                product_df['lag_1'] = product_df['y'].shift(1).fillna(product_df['y'])
-                product_df['lag_7'] = product_df['y'].shift(7).fillna(product_df['y'])
-            
             try:
                 model = Prophet(
                     daily_seasonality=False,
@@ -70,8 +63,6 @@ def train_all_models():
                     changepoint_prior_scale=0.05,
                     interval_width=0.8,
                 )
-                model.add_regressor('lag_1')
-                model.add_regressor('lag_7')
                 model.fit(product_df)
                 
                 model_name = f"{store}_{product}".replace(" ", "_").lower()
@@ -84,8 +75,9 @@ def train_all_models():
     
     return models_trained
 
+
 def generate_forecast(target_date=None):
-    """Generate forecast for a specific date. Defaults to tomorrow."""
+    """Generate forecast. Uses historical average as fallback."""
     if target_date is None:
         target_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     
@@ -101,72 +93,64 @@ def generate_forecast(target_date=None):
             model_name = f"{store}_{product}".replace(" ", "_").lower()
             model_path = os.path.join(MODELS_DIR, f"{model_name}.pkl")
             
-            if not os.path.exists(model_path):
+            yhat = None
+            yhat_lower = None
+            yhat_upper = None
+            conf = 'Low'
+            
+            # Try model
+            if os.path.exists(model_path):
+                try:
+                    with open(model_path, 'rb') as f:
+                        model = pickle.load(f)
+                    
+                    future = model.make_future_dataframe(periods=30)
+                    forecast = model.predict(future)
+                    
+                    forecast['ds'] = forecast['ds'].dt.strftime("%Y-%m-%d")
+                    match = forecast[forecast['ds'] == target_date]
+                    
+                    if not match.empty:
+                        row = match.iloc[0]
+                        yhat = max(0, round(row['yhat']))
+                        yhat_lower = max(0, round(row['yhat_lower']))
+                        yhat_upper = round(row['yhat_upper'])
+                        
+                        if yhat > 0:
+                            interval_width = yhat_upper - yhat_lower
+                            ratio = interval_width / yhat
+                            if ratio < 0.3:
+                                conf = 'High'
+                            elif ratio < 0.7:
+                                conf = 'Medium'
+                except Exception as e:
+                    print(f"Model failed for {model_name}: {e}")
+            
+            # Fallback: historical average
+            if yhat is None:
                 mask = (df['store'] == store) & (df['product'] == product)
                 recent = df[mask].tail(7)
                 if len(recent) > 0:
-                    avg = round(recent['y'].mean())
-                    results.append({
-                        'store': store,
-                        'product': product,
-                        'recommended': avg,
-                        'confidence': 'Low',
-                        'lower_bound': max(0, avg - 10),
-                        'upper_bound': avg + 10,
-                    })
-                continue
-            
-            try:
-                with open(model_path, 'rb') as f:
-                    model = pickle.load(f)
-                
-                    future = model.make_future_dataframe(periods=30)
-                    
-                    # Add lag features for prediction
-                    last_known = product_df[product_df['ds'] <= pd.to_datetime(target_date)].tail(7)
-                    if len(last_known) >= 1:
-                        future['lag_1'] = last_known['y'].iloc[-1] if len(last_known) >= 1 else product_df['y'].mean()
-                    if len(last_known) >= 7:
-                        future['lag_7'] = last_known['y'].iloc[-7] if len(last_known) >= 7 else product_df['y'].mean()
-                    future['lag_1'] = future['lag_1'].fillna(product_df['y'].mean())
-                    future['lag_7'] = future['lag_7'].fillna(product_df['y'].mean())
-                    
-                    forecast = model.predict(future)
-                
-                forecast['ds'] = forecast['ds'].dt.strftime("%Y-%m-%d")
-                match = forecast[forecast['ds'] == target_date]
-                
-                if match.empty:
-                    continue
-                
-                row = match.iloc[0]
-                yhat = max(0, round(row['yhat']))
-                yhat_lower = max(0, round(row['yhat_lower']))
-                yhat_upper = round(row['yhat_upper'])
-                
-                interval_width = yhat_upper - yhat_lower
-                if yhat > 0 and interval_width / yhat < 0.5:
-                    conf = 'High'
-                elif yhat > 0 and interval_width / yhat < 1.0:
-                    conf = 'Medium'
+                    yhat = round(recent['y'].mean())
+                    yhat_lower = max(0, yhat - 10)
+                    yhat_upper = yhat + 10
                 else:
-                    conf = 'Low'
-                
-                results.append({
-                    'store': store,
-                    'product': product,
-                    'recommended': yhat,
-                    'confidence': conf,
-                    'lower_bound': yhat_lower,
-                    'upper_bound': yhat_upper,
-                })
-            except Exception as e:
-                print(f"Forecast failed: {store} - {product}: {e}")
+                    continue
+            
+            results.append({
+                'store': store,
+                'product': product,
+                'recommended': yhat,
+                'confidence': conf,
+                'lower_bound': yhat_lower or max(0, yhat - 10),
+                'upper_bound': yhat_upper or yhat + 10,
+            })
     
     return results
 
+
 def save_forecast_to_db(forecast_results, target_date=None):
-    """Save a generated forecast to the production_plans table."""
+    """Save forecast to production_plans table."""
     if target_date is None:
         target_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     
@@ -185,6 +169,13 @@ def save_forecast_to_db(forecast_results, target_date=None):
     
     for item in forecast_results:
         product_id = product_map.get(item['product'].lower())
+        if not product_id:
+            # Try case-insensitive match
+            for name, pid in product_map.items():
+                if name.lower() == item['product'].lower():
+                    product_id = pid
+                    break
+        
         if product_id:
             conn.execute(
                 "INSERT INTO plan_items (plan_id, product_id, ai_recommended) VALUES (?, ?, ?)",
