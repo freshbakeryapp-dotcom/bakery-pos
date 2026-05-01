@@ -78,6 +78,18 @@ def init_db():
         )
     """)
     
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            store TEXT NOT NULL,
+            date TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            description TEXT,
+            expected_impact TEXT DEFAULT 'medium',
+            created_at TEXT NOT NULL
+        )
+    """)
+
     # Seed products if empty
     sample_products = [
         ("Sourdough Loaf", "Bread", 4.50, 1.20, 24),

@@ -193,11 +193,18 @@ def save_forecast_to_db(forecast_results, target_date=None):
     for row in conn.execute("SELECT id, name FROM products"):
         product_map[row['name'].lower()] = row['id']
     
+    # Apply event adjustments
+    from src.events import apply_event_adjustments
+    forecast_results, events = apply_event_adjustments(forecast_results, target_date)
+    
+    # Apply event adjustments
+    from src.events import apply_event_adjustments
+    forecast_results, events = apply_event_adjustments(forecast_results, target_date)
+    
     for item in forecast_results:
         product_id = product_map.get(item['product'].lower())
-        if not product_id:
             # Try case-insensitive match
-            for name, pid in product_map.items():
+        for name, pid in product_map.items():
                 if name.lower() == item['product'].lower():
                     product_id = pid
                     break
