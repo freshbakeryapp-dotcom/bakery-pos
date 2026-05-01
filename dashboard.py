@@ -99,6 +99,14 @@ if not latest_plan:
 # ============================================================
 else:
     plan_date = latest_plan['date']
+        # DEBUG
+    all_prods = conn.execute("SELECT id, name FROM products").fetchall()
+    st.write("**Products in DB:**")
+    for p in all_prods:
+        st.write(f"  - {p['name']}")
+    
+    plan_items_raw = conn.execute("SELECT COUNT(*) as cnt FROM plan_items WHERE plan_id = ?", (latest_plan['id'],)).fetchone()
+    st.write(f"**Plan items in DB: {plan_items_raw['cnt']}**")
     today = datetime.now().strftime("%Y-%m-%d")
     tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
     
