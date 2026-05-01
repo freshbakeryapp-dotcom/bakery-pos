@@ -229,6 +229,17 @@ if not latest_plan:
                     conn.commit()
                     st.success(f"✅ Imported {inserted} sales records!")
                     
+                    # DEBUG: Check what was imported
+                    date_check = conn.execute("""
+                        SELECT date(timestamp) as sale_date, COUNT(*) as cnt 
+                        FROM sales 
+                        GROUP BY sale_date 
+                        ORDER BY sale_date
+                    """).fetchall()
+                    st.write(f"**Dates after import: {len(date_check)}**")
+                    for d in date_check:
+                        st.write(f"{d['sale_date']}: {d['cnt']} sales")
+
                     # Train immediately
                     from engine import train_all_models, generate_forecast, save_forecast_to_db
                     with st.spinner("Training AI on historical data..."):
