@@ -50,6 +50,8 @@ from datetime import datetime, timedelta
 last_train_time = conn.execute("SELECT MAX(created_at) as last_time FROM production_plans").fetchone()['last_time']
 
 should_auto_train = False
+# Debug: show training status
+st.sidebar.write(f"Hours since last train: {hours_since_train:.1f}" if last_train_time else "No training history")
 if last_train_time:
     last_train_dt = datetime.strptime(last_train_time, "%Y-%m-%d %H:%M:%S")
     hours_since_train = (datetime.now() - last_train_dt).total_seconds() / 3600
@@ -68,6 +70,13 @@ if should_auto_train:
             save_forecast_to_db(forecast)
             st.sidebar.success(f"🔄 Auto-trained {count} models")
 
+
+# Show last train time in sidebar
+st.sidebar.markdown("---")
+if last_train_time:
+    st.sidebar.caption(f"🕐 Last trained: {last_train_time}")
+else:
+    st.sidebar.caption("🕐 Never trained")
 # ============================================================
 # MODE 1: NO FORECAST
 # ============================================================
