@@ -9,12 +9,8 @@ st.title("📦 Product Management")
 
 conn = get_db()
 
-# Tabs for list and add
 tab1, tab2 = st.tabs(["📋 All Products", "➕ Add Product"])
 
-# ============================================================
-# TAB 1: Product List
-# ============================================================
 with tab1:
     products = conn.execute("SELECT * FROM products ORDER BY category, name").fetchall()
     
@@ -44,14 +40,13 @@ with tab1:
                     st.rerun()
                 
                 if col7.button("🗑️ Delete", key=f"delete_{product['id']}"):
-                    # Check if product has sales
                     sales_count = conn.execute(
                         "SELECT COUNT(*) as cnt FROM sales WHERE product_id = ?",
                         (product['id'],)
                     ).fetchone()['cnt']
                     
                     if sales_count > 0:
-                        st.warning(f"Cannot delete — has {sales_count} sales records. Consider hiding instead.")
+                        st.warning(f"Cannot delete — has {sales_count} sales records.")
                     else:
                         conn.execute("DELETE FROM products WHERE id = ?", (product['id'],))
                         conn.commit()
@@ -60,32 +55,33 @@ with tab1:
     else:
         st.info("No products found.")
 
-# ============================================================
-# TAB 2: Add Product
-# ============================================================
 with tab2:
     st.subheader("Add New Product")
     
-    cols = st.columns(2)
-    add_name = cols[0].text_input("Product Name", key="add_name")
-    add_category = cols[1].text_input("Category (e.g., Bread, Pastry, Local)", key="add_category")
-    
-    cols2 = st.columns(3)
-    add_price = cols2[0].number_input("Selling Price ($)", min_value=0.0, step=0.50, key="add_price")
-    add_cost = cols2[1].number_input("Cost to Make ($)", min_value=0.0, step=0.10, key="add_cost")
-    add_shelf = cols2[2].number_input("Shelf Life (hours)", min_value=1, max_value=168, value=24, step=1, key="add_shelf")
-    
-    if st.button("➕ Add Product", type="primary", key="add_product_btn"):
-        if add_name and add_price > 0:
-            conn.execute(
-                "INSERT INTO products (name, category, price, cost_to_make, shelf_life_hours) VALUES (?, ?, ?, ?, ?)",
-                (add_name, add_category, add_price, add_cost, add_shelf)
-            )
-            conn.commit()
-            st.success(f"✅ {add_name} added!")
-            st.balloons()
-            st.rerun()
-        else:
-            st.error("Product name and price are required.")
+    # Use a form so it clears on submit
+    with st.form("add_product_form", clear_on_submit=True):
+        cols = st.columns(2)
+        add_name = cols[0].text_input("Product Name")
+        add_category = cols[1].text_input("Category (e.g., Bread, Pastry, Local)")
+        
+        cols2 = st.columns(3)
+        add_price = cols2[0].number_input("Selling Price ($)", min_value=0.0, step=0.50)
+        add_cost = cols2[1].number_input("Cost to Make ($)", min_value=0.0, step=0.10)
+        add_shelf = cols2[2].number_input("Shelf Life (hours)", min_value=1, max_value=168, value=24, step=1)
+        
+        submitted = st.form_submit_button("➕ Add Product", type="primary")
+        
+        if submitted:
+            if add_name and add_price > 0:
+                conn.execute(
+                    "INSERT INTO products (name, category, price, cost_to_make, shelf_life_hours) VALUES (?, ?, ?, ?, ?)",
+                    (add_name, add_category, add_price, add_cost, add_shelf)
+                )
+                conn.commit()
+                st.success(f"✅ {add_name} added!")
+                st.balloons()
+                st.rerun()
+            else:
+                st.error("Product name and price are required.")
 
 conn.close()
