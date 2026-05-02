@@ -5,123 +5,73 @@ from db import get_db, init_db
 
 init_db()
 
-# ---- CUSTOM BAKERY STYLING ----
+st.set_page_config(page_title="POS", layout="wide")
+
 st.markdown("""
 <style>
-    /* Warm bakery palette */
-    :root {
-        --cream: #FFF8F0;
-        --sage: #7A9A7E;
-        --sage-dark: #5C7A60;
-        --caramel: #C4956A;
-        --caramel-light: #F5E6D3;
-        --charcoal: #3D3430;
-        --soft-white: #FFFAF5;
-    }
-    
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    .stApp {
-        margin-top: -60px;
-        background: var(--soft-white);
-    }
-    
-    /* Typography */
-    h1, h2, h3, .total-text {
-        font-family: 'Georgia', serif;
-        color: var(--charcoal);
-    }
+    .stApp {margin-top: -60px; background: #FAFAFA;}
     
     /* Product buttons */
     .stButton > button {
-        height: 65px;
-        border-radius: 12px;
-        font-weight: 600;
+        height: 60px;
+        border-radius: 8px;
+        font-weight: 500;
         font-size: 0.85rem;
-        border: 1.5px solid #E8DDD5;
+        border: 1px solid #E0E0E0;
         background: white;
-        color: var(--charcoal);
-        transition: all 0.1s ease;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        color: #1A1A1A;
     }
     .stButton > button:hover {
-        border-color: var(--sage);
-        background: #F8F6F3;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    }
-    .stButton > button:active {
-        background: var(--sage);
-        color: white;
-        border-color: var(--sage-dark);
+        border-color: #1A1A1A;
+        background: #F5F5F5;
     }
     
-    /* Category pills */
-    .cat-active button {
-        background: var(--sage) !important;
-        color: white !important;
-        border-color: var(--sage-dark) !important;
+    /* Category buttons */
+    .cat-btn button {
+        border-radius: 20px;
+        font-size: 0.8rem;
+        padding: 4px 16px;
+        height: 36px;
     }
     
     /* Quantity buttons */
-    .qty-row button {
-        height: 32px !important;
-        width: 32px !important;
-        padding: 0 !important;
-        font-size: 1rem !important;
-        font-weight: 700 !important;
-        border-radius: 8px !important;
-    }
-    
-    /* PAY button */
-    .pay-btn button {
-        height: 60px !important;
-        font-size: 1.2rem !important;
-        font-weight: 700 !important;
-        background: var(--sage) !important;
-        color: white !important;
-        border: none !important;
-        letter-spacing: 1px;
-    }
-    .pay-btn button:hover {
-        background: var(--sage-dark) !important;
-    }
-    
-    /* Cart item */
-    .cart-item {
-        padding: 10px 0;
-        border-bottom: 1px solid #F0EBE5;
-    }
-    
-    /* Badges */
-    .badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 0.7rem;
+    .qty-col button {
+        height: 32px;
+        width: 32px;
+        padding: 0;
+        font-size: 1rem;
         font-weight: 600;
-        margin: 2px;
+        border-radius: 6px;
     }
-    .badge-fresh { background: #E8F5E9; color: #2E7D32; }
-    .badge-popular { background: #FFF3E0; color: #E65100; }
-    .badge-new { background: #E3F2FD; color: #1565C0; }
     
-    /* Divider */
-    hr { border-color: #E8DDD5; }
+    /* Checkout button */
+    .checkout-btn button {
+        height: 56px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        background: #1A1A1A;
+        color: white;
+        border: none;
+        border-radius: 8px;
+    }
+    .checkout-btn button:hover {
+        background: #333;
+    }
+    
+    hr {border-color: #EEEEEE; margin: 12px 0;}
 </style>
 """, unsafe_allow_html=True)
 
 conn = get_db()
 
-# Session state
 if 'cart' not in st.session_state:
     st.session_state.cart = {}
 if 'sale_done' not in st.session_state:
     st.session_state.sale_done = False
 if 'active_category' not in st.session_state:
     st.session_state.active_category = None
-if 'order_note' not in st.session_state:
-    st.session_state.order_note = ""
 
 def cart_total():
     return sum(item['price'] * item['qty'] for item in st.session_state.cart.values())
@@ -130,192 +80,103 @@ def cart_count():
     return sum(item['qty'] for item in st.session_state.cart.values())
 
 # ---- HEADER ----
-header = st.columns([3, 1.5, 1])
-header[0].markdown("# 🥖 Bakery POS")
-store = header[1].selectbox(
-    "📍 Store",
-    ["Gadong", "Kiulap", "Seria", "Kuala Belait", "Tutong", "Batu Satu", "Sengkurong"],
-    label_visibility="collapsed"
-)
-header[2].markdown(f"<div style='text-align:right; padding-top:15px; font-size:1.1rem;'><b>🛒 {cart_count()}</b> items</div>", unsafe_allow_html=True)
-
+h = st.columns([3, 2, 1])
+h[0].markdown("## 🧾 POS")
+store = h[1].selectbox("Store", ["Gadong", "Kiulap", "Seria", "Kuala Belait", "Tutong", "Batu Satu", "Sengkurong"], label_visibility="collapsed")
+h[2].markdown(f"<div style='padding-top:12px; font-size:1rem; color:#666;'>{cart_count()} items</div>", unsafe_allow_html=True)
 st.divider()
 
-# ---- SALE COMPLETE SCREEN ----
 if st.session_state.sale_done:
-    st.success("## ✅ Order Complete!")
-    st.balloons()
-    
+    st.success("Order complete")
     if st.session_state.get('last_order'):
-        st.markdown(f"<div class='total-text' style='font-size:2.5rem; text-align:center;'>${st.session_state.last_order['total']:.2f}</div>", unsafe_allow_html=True)
+        st.markdown(f"## ${st.session_state.last_order['total']:.2f}")
         for item in st.session_state.last_order['items']:
-            st.write(f"• {item['name']} ×{item['qty']}")
-    
-    if st.button("🆕 New Order", type="primary", use_container_width=True):
+            st.write(f"{item['name']} ×{item['qty']}")
+    if st.button("New Order", type="primary", use_container_width=True):
         st.session_state.sale_done = False
         st.session_state.last_order = None
         st.session_state.active_category = None
-        st.session_state.order_note = ""
         st.rerun()
 
 else:
-    # ---- MAIN POS ----
-    left_panel, right_panel = st.columns([2, 1])
+    left, right = st.columns([2, 1])
     
-    with left_panel:
-        # ---- CATEGORY FILTER CHIPS ----
-        categories = conn.execute(
-            "SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category"
-        ).fetchall()
-        cat_list = [c['category'] for c in categories]
+    with left:
+        # Categories
+        cats = conn.execute("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category").fetchall()
+        cat_list = [c['category'] for c in cats]
         
         if cat_list:
-            cat_cols = st.columns(len(cat_list) + 1)
-            
-            is_all = st.session_state.active_category is None
-            all_label = "📋 All"
-            if cat_cols[0].button(all_label, key="cat_all", use_container_width=True,
-                                   help="Show all products"):
+            cols = st.columns(len(cat_list) + 1)
+            if cols[0].button("All", key="c_all", use_container_width=True):
                 st.session_state.active_category = None
                 st.rerun()
-            
             for i, cat in enumerate(cat_list):
-                is_active = st.session_state.active_category == cat
-                emoji_map = {"Bread": "🍞", "Pastry": "🥐", "Local": "🍡", "Savoury": "🥧", "Cake": "🎂"}
-                emoji = emoji_map.get(cat, "📦")
-                label = f"{emoji} {cat}"
-                
-                if is_active:
-                    st.markdown(f"<style>div[data-testid='stHorizontalBlock'] div:nth-child({i+2}) button {{background: #7A9A7E !important; color: white !important;}}</style>", unsafe_allow_html=True)
-                
-                if cat_cols[i + 1].button(label, key=f"cat_{cat}", use_container_width=True):
+                if cols[i+1].button(cat, key=f"c_{cat}", use_container_width=True):
                     st.session_state.active_category = cat
                     st.rerun()
         
         st.divider()
         
-        # ---- PRODUCT GRID ----
+        # Products
         if st.session_state.active_category:
-            products = conn.execute(
-                "SELECT id, name, price, category FROM products WHERE category = ? ORDER BY name",
-                (st.session_state.active_category,)
-            ).fetchall()
+            products = conn.execute("SELECT id, name, price FROM products WHERE category=? ORDER BY name", (st.session_state.active_category,)).fetchall()
         else:
-            products = conn.execute(
-                "SELECT id, name, price, category FROM products ORDER BY category, name"
-            ).fetchall()
+            products = conn.execute("SELECT id, name, price FROM products ORDER BY category, name").fetchall()
         
         if products:
             cols = st.columns(3)
-            for i, product in enumerate(products):
+            for i, p in enumerate(products):
                 with cols[i % 3]:
-                    pid = str(product['id'])
-                    in_cart = pid in st.session_state.cart
-                    qty = st.session_state.cart[pid]['qty'] if in_cart else 0
-                    
-                    # Product name with optional badge
-                    name = product['name']
-                    qty_indicator = f" · ×{qty}" if qty > 0 else ""
-                    
-                    # Random badge for visual interest (in real app, stored in DB)
-                    badge = ""
-                    if i % 4 == 0:
-                        badge = " <span class='badge badge-fresh'>Fresh</span>"
-                    elif i % 4 == 1:
-                        badge = " <span class='badge badge-popular'>Popular</span>"
-                    
-                    label = f"{name}{qty_indicator}\n${product['price']:.2f}"
-                    
-                    if st.button(label, key=f"add_{product['id']}", use_container_width=True):
-                        if in_cart:
+                    pid = str(p['id'])
+                    qty = st.session_state.cart[pid]['qty'] if pid in st.session_state.cart else 0
+                    label = f"{p['name']}{' ×'+str(qty) if qty else ''}\n${p['price']:.2f}"
+                    if st.button(label, key=f"p_{p['id']}", use_container_width=True):
+                        if pid in st.session_state.cart:
                             st.session_state.cart[pid]['qty'] += 1
                         else:
-                            st.session_state.cart[pid] = {
-                                'name': product['name'],
-                                'price': product['price'],
-                                'category': product['category'],
-                                'qty': 1
-                            }
+                            st.session_state.cart[pid] = {'name': p['name'], 'price': p['price'], 'qty': 1}
                         st.rerun()
-        else:
-            st.info("No products in this category")
     
-    with right_panel:
-        # ---- ORDER TICKET ----
-        st.markdown(f"<h3 style='font-family:Georgia,serif;'>🧾 Order Ticket</h3>", unsafe_allow_html=True)
+    with right:
+        st.markdown("### Order")
         
         if st.session_state.cart:
-            cart_items = list(st.session_state.cart.items())
-            
-            for pid, item in cart_items:
-                item_total = item['price'] * item['qty']
+            for pid, item in st.session_state.cart.items():
+                c = st.columns([2.5, 1.5, 1])
+                c[0].markdown(f"**{item['name'][:16]}**<br><span style='color:#888; font-size:0.8rem;'>${item['price']:.2f}</span>", unsafe_allow_html=True)
                 
-                r_cols = st.columns([3, 1.8, 1])
-                
-                # Product name + price per unit
-                r_cols[0].markdown(f"""
-                <div class='cart-item'>
-                    <b>{item['name'][:18]}</b><br>
-                    <span style='color:#888; font-size:0.8rem;'>${item['price']:.2f} each</span>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Quantity controls
-                qty_cols = r_cols[1].columns([1, 1.2, 1])
-                if qty_cols[0].button("−", key=f"m_{pid}"):
+                qc = c[1].columns([1, 1, 1])
+                if qc[0].button("−", key=f"m_{pid}"):
                     if st.session_state.cart[pid]['qty'] > 1:
                         st.session_state.cart[pid]['qty'] -= 1
                     else:
                         del st.session_state.cart[pid]
                     st.rerun()
-                
-                qty_cols[1].markdown(f"<div style='text-align:center; padding-top:5px; font-weight:700; font-size:1.1rem;'>{item['qty']}</div>", unsafe_allow_html=True)
-                
-                if qty_cols[2].button("+", key=f"p_{pid}"):
+                qc[1].markdown(f"<div style='text-align:center; padding-top:3px; font-weight:600;'>{item['qty']}</div>", unsafe_allow_html=True)
+                if qc[2].button("+", key=f"pl_{pid}"):
                     st.session_state.cart[pid]['qty'] += 1
                     st.rerun()
                 
-                # Item total
-                r_cols[2].markdown(f"<div style='text-align:right; padding-top:8px; font-weight:600;'>${item_total:.2f}</div>", unsafe_allow_html=True)
+                c[2].markdown(f"<div style='text-align:right; padding-top:8px; font-weight:500;'>${item['price']*item['qty']:.2f}</div>", unsafe_allow_html=True)
             
             st.divider()
-            
-            # Order note
-            st.session_state.order_note = st.text_input(
-                "Order note (optional)",
-                value=st.session_state.order_note,
-                placeholder="e.g., Extra crispy, no sesame...",
-                key="order_note_input"
-            )
-            
-            st.divider()
-            
-            # Total
             total = cart_total()
-            st.markdown(f"""
-            <div style='text-align:center; margin:10px 0;'>
-                <div style='font-size:0.9rem; color:#888;'>{cart_count()} items</div>
-                <div class='total-text' style='font-size:2.2rem; font-weight:700;'>${total:.2f}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; font-size:2rem; font-weight:700;'>${total:.2f}</div>", unsafe_allow_html=True)
+            st.caption(f"{cart_count()} items")
             
-            # Action buttons
-            col1, col2 = st.columns(2)
-            if col1.button("🗑️ Void", use_container_width=True, help="Clear entire order"):
+            c1, c2 = st.columns(2)
+            if c1.button("Clear", use_container_width=True):
                 st.session_state.cart = {}
-                st.session_state.order_note = ""
                 st.rerun()
             
-            st.markdown("<div class='pay-btn'>", unsafe_allow_html=True)
-            if st.button("💳 Checkout", key="pay", use_container_width=True):
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.markdown("<div class='checkout-btn'>", unsafe_allow_html=True)
+            if st.button("Checkout", key="pay", use_container_width=True):
+                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 order_items = []
                 for pid, item in st.session_state.cart.items():
                     for _ in range(item['qty']):
-                        conn.execute(
-                            "INSERT INTO sales (product_id, store, quantity, unit_price, total, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                            (int(pid), store, 1, item['price'], item['price'], timestamp)
-                        )
+                        conn.execute("INSERT INTO sales (product_id, store, quantity, unit_price, total, timestamp) VALUES (?,?,?,?,?,?)", (int(pid), store, 1, item['price'], item['price'], ts))
                     order_items.append({'name': item['name'], 'price': item['price'], 'qty': item['qty']})
                 conn.commit()
                 st.session_state.last_order = {'items': order_items, 'total': total}
@@ -324,6 +185,6 @@ else:
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
         else:
-            st.info("👈 Select a category, then tap products to build your order")
+            st.info("Select a category and tap products")
 
 conn.close()
