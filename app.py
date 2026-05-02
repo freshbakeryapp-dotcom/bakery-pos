@@ -7,56 +7,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for better styling
-st.markdown("""
-<style>
-    .stButton button {
-        border-radius: 10px;
-        font-weight: 600;
-    }
-    .product-card {
-        border: 1px solid #ddd;
-        border-radius: 12px;
-        padding: 15px;
-        text-align: center;
-        margin: 5px;
-        cursor: pointer;
-    }
-    .metric-card {
-        background: #f8f9fa;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        margin: 10px 0;
-    }
-    .big-number {
-        font-size: 2.5rem;
-        font-weight: 700;
-    }
-    .section-title {
-        font-size: 1.3rem;
-        font-weight: 600;
-        margin-bottom: 15px;
-    }
-    .plan-item {
-        border-left: 4px solid #4CAF50;
-        padding: 10px 15px;
-        margin: 8px 0;
-        background: #f9f9f9;
-        border-radius: 8px;
-    }
-    .plan-item.warning {
-        border-left-color: #FF9800;
-    }
-    .plan-item.danger {
-        border-left-color: #f44336;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Load global CSS
+def load_css():
+    with open("styles/global.css") as f:
+        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-# Top navigation as radio buttons styled as tabs
+load_css()
+
+# Navigation
 page = st.radio(
-    "",
+    "Navigation",
     ["🧾 POS", "📊 Dashboard", "📦 Products", "📅 Events"],
     horizontal=True,
     label_visibility="collapsed"

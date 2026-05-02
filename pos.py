@@ -4,66 +4,6 @@ from datetime import datetime
 from db import get_db, init_db
 
 init_db()
-
-st.set_page_config(page_title="POS", layout="wide")
-
-st.markdown("""
-<style>
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stApp {margin-top: -60px; background: #FAFAFA;}
-    
-    /* Product buttons */
-    .stButton > button {
-        height: 60px;
-        border-radius: 8px;
-        font-weight: 500;
-        font-size: 0.85rem;
-        border: 1px solid #E0E0E0;
-        background: white;
-        color: #1A1A1A;
-    }
-    .stButton > button:hover {
-        border-color: #1A1A1A;
-        background: #F5F5F5;
-    }
-    
-    /* Category buttons */
-    .cat-btn button {
-        border-radius: 20px;
-        font-size: 0.8rem;
-        padding: 4px 16px;
-        height: 36px;
-    }
-    
-    /* Quantity buttons */
-    .qty-col button {
-        height: 32px;
-        width: 32px;
-        padding: 0;
-        font-size: 1rem;
-        font-weight: 600;
-        border-radius: 6px;
-    }
-    
-    /* Checkout button */
-    .checkout-btn button {
-        height: 56px;
-        font-size: 1.1rem;
-        font-weight: 600;
-        background: #1A1A1A;
-        color: white;
-        border: none;
-        border-radius: 8px;
-    }
-    .checkout-btn button:hover {
-        background: #333;
-    }
-    
-    hr {border-color: #EEEEEE; margin: 12px 0;}
-</style>
-""", unsafe_allow_html=True)
-
 conn = get_db()
 
 if 'cart' not in st.session_state:
@@ -79,11 +19,10 @@ def cart_total():
 def cart_count():
     return sum(item['qty'] for item in st.session_state.cart.values())
 
-# ---- HEADER ----
 h = st.columns([3, 2, 1])
 h[0].markdown("## 🧾 POS")
 store = h[1].selectbox("Store", ["Gadong", "Kiulap", "Seria", "Kuala Belait", "Tutong", "Batu Satu", "Sengkurong"], label_visibility="collapsed")
-h[2].markdown(f"<div style='padding-top:12px; font-size:1rem; color:#666;'>{cart_count()} items</div>", unsafe_allow_html=True)
+h[2].markdown(f"<div style='padding-top:12px; font-size:1rem; color:var(--gray-600);'>{cart_count()} items</div>", unsafe_allow_html=True)
 st.divider()
 
 if st.session_state.sale_done:
@@ -97,12 +36,10 @@ if st.session_state.sale_done:
         st.session_state.last_order = None
         st.session_state.active_category = None
         st.rerun()
-
 else:
     left, right = st.columns([2, 1])
     
     with left:
-        # Categories
         cats = conn.execute("SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND category != '' ORDER BY category").fetchall()
         cat_list = [c['category'] for c in cats]
         
@@ -118,7 +55,6 @@ else:
         
         st.divider()
         
-        # Products
         if st.session_state.active_category:
             products = conn.execute("SELECT id, name, price FROM products WHERE category=? ORDER BY name", (st.session_state.active_category,)).fetchall()
         else:
@@ -144,7 +80,7 @@ else:
         if st.session_state.cart:
             for pid, item in st.session_state.cart.items():
                 c = st.columns([2.5, 1.5, 1])
-                c[0].markdown(f"**{item['name'][:16]}**<br><span style='color:#888; font-size:0.8rem;'>${item['price']:.2f}</span>", unsafe_allow_html=True)
+                c[0].markdown(f"**{item['name'][:16]}**<br><span style='color:var(--gray-400); font-size:0.8rem;'>${item['price']:.2f}</span>", unsafe_allow_html=True)
                 
                 qc = c[1].columns([1, 1, 1])
                 if qc[0].button("−", key=f"m_{pid}"):
@@ -170,8 +106,7 @@ else:
                 st.session_state.cart = {}
                 st.rerun()
             
-            st.markdown("<div class='checkout-btn'>", unsafe_allow_html=True)
-            if st.button("Checkout", key="pay", use_container_width=True):
+            if st.button("Checkout", type="primary", use_container_width=True):
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 order_items = []
                 for pid, item in st.session_state.cart.items():
@@ -183,7 +118,6 @@ else:
                 st.session_state.cart = {}
                 st.session_state.sale_done = True
                 st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("Select a category and tap products")
 
