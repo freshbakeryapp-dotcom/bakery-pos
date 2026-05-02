@@ -1,80 +1,78 @@
 import streamlit as st
+from datetime import datetime
 
 st.set_page_config(
-    page_title="BakeryOS",
-    page_icon="🥖",
+    page_title="Artisan Crumb - Bakery OS",
+    page_icon="🥐",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Inject CSS directly — no file loading
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+# Load custom CSS
+try:
+    with open('styles.css', encoding='utf-8') as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+except FileNotFoundError:
+    pass
 
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    header { visibility: hidden !important; }
-    footer { visibility: hidden !important; }
-    .stApp { margin-top: -60px; background: #FAFAFA; }
-    
-    .stButton > button {
-        height: 48px !important;
-        border-radius: 8px !important;
-        font-weight: 500 !important;
-        font-size: 0.875rem !important;
-        border: 1px solid #E0E0E0 !important;
-        background: white !important;
-        color: #1A1A1A !important;
-    }
-    .stButton > button:hover {
-        border-color: #1A1A1A !important;
-        background: #F5F5F5 !important;
-    }
-    .stButton > button[kind="primary"] {
-        background: #1A1A1A !important;
-        color: white !important;
-        border: none !important;
-    }
-    .stButton > button[kind="primary"]:hover {
-        background: #333 !important;
-    }
-    
-    [data-testid="stMetric"] {
-        background: white;
-        border: 1px solid #E0E0E0;
-        border-radius: 12px;
-        padding: 16px;
-    }
-    
-    hr { border-color: #EEEEEE !important; }
-    
-    .stTabs [data-baseweb="tab"] {
-        font-weight: 500;
-        font-size: 0.9rem;
-    }
-    
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #DDD; border-radius: 3px; }
-</style>
-""", unsafe_allow_html=True)
+# Initialize session state
+if 'page' not in st.session_state:
+    st.session_state.page = 'POS'
+if 'cart' not in st.session_state:
+    st.session_state.cart = {}
+if 'store' not in st.session_state:
+    st.session_state.store = 'Gadong'
+
+# Header
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.markdown('<h1 style="font-family: \'Playfair Display\', serif; color: #3C2415; margin: 0;">🥐 Artisan Crumb</h1>', unsafe_allow_html=True)
+with col2:
+    store_options = ["Gadong", "Kiulap", "Seria", "Kuala Belait", "Tutong", "Batu Satu", "Sengkurong"]
+    selected_store = st.selectbox("Store", store_options, index=store_options.index(st.session_state.store), label_visibility="collapsed")
+    st.session_state.store = selected_store
+
+st.markdown('<div style="height: 1px; background: linear-gradient(90deg, #E8DCC8, transparent); margin: 1.5rem 0;"></div>', unsafe_allow_html=True)
 
 # Navigation
-page = st.radio(
-    "Navigation",
-    ["🧾 POS", "📊 Dashboard", "📦 Products", "📅 Events"],
-    horizontal=True,
-    label_visibility="collapsed"
-)
+# We have 8 pages now: POS, Dashboard, Products, Events, Ordering, Prep List, Wrap-Up, ROI
+nav_cols = st.columns(8)
+pages = [
+    ("🧾 POS", "POS"), 
+    ("📊 Dashboard", "Dashboard"), 
+    ("📦 Products", "Products"), 
+    ("📅 Events", "Events"), 
+    ("📦 Ordering", "Ordering"), 
+    ("📋 Prep List", "Prep List"), 
+    ("🌙 Wrap-Up", "Wrap-Up"), 
+    ("💰 ROI", "ROI")
+]
 
-if page == "🧾 POS":
+for i, (label, page_name) in enumerate(pages):
+    with nav_cols[i]:
+        is_active = st.session_state.page == page_name
+        if st.button(label, key=f"nav_{page_name}", use_container_width=True, type="primary" if is_active else "secondary"):
+            st.session_state.page = page_name
+            st.rerun()
+
+st.markdown('<div style="height: 2rem;"></div>', unsafe_allow_html=True)
+
+# Page routing
+if st.session_state.page == 'POS':
     exec(open("pos.py", encoding="utf-8").read())
-elif page == "📊 Dashboard":
+elif st.session_state.page == 'Dashboard':
     exec(open("dashboard.py", encoding="utf-8").read())
-elif page == "📦 Products":
+elif st.session_state.page == 'Products':
     exec(open("products.py", encoding="utf-8").read())
-elif page == "📅 Events":
+elif st.session_state.page == 'Events':
     exec(open("events_page.py", encoding="utf-8").read())
+elif st.session_state.page == 'Ordering':
+    exec(open("ordering_page.py", encoding="utf-8").read())
+elif st.session_state.page == 'Prep List':
+    exec(open("prep_list_page.py", encoding="utf-8").read())
+elif st.session_state.page == 'Wrap-Up':
+    exec(open("wrap_up_page.py", encoding="utf-8").read())
+elif st.session_state.page == 'ROI':
+    exec(open("roi_page.py", encoding="utf-8").read())
+else:
+    st.error("Page not found.")

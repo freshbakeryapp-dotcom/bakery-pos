@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:wght@600;700&display=swap');
+
+/* Force Light Background */
+body, .main, [data-testid="stAppViewContainer"] {
+    background-color: #FAF7F2 !important;
+    color: #3C2415 !important;
+}
+
+/* Hide Streamlit Chrome */
+#MainMenu, footer, header { visibility: hidden; }
+
+/* Headings */
+h1, h2, h3 { font-family: 'Playfair Display', serif; color: #3C2415 !important; }
+
+/* ========================================= */
+/* PRODUCT CARDS (The Buttons)               */
+/* ========================================= */
+/* Target buttons inside the product grid ONLY */
+div[data-testid="column"] > div > div[data-testid="stVerticalBlock"] > div[data-testid="stButton"] > button {
+    background-color: #FFFFFF !important;
+    color: #3C2415 !important;
+    border: 2px solid #E8DCC8 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 4px 12px rgba(60,36,21,0.06) !important;
+    padding: 1.5rem !important;
+    min-height: 120px !important; /* Fixed minimum height */
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+    transition: all 0.2s ease !important;
+    width: 100% !important;
+    cursor: pointer !important;
+}
+
+/* Hover Effect */
+div[data-testid="column"] > div > div[data-testid="stVerticalBlock"] > div[data-testid="stButton"] > button:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 6px 16px rgba(60,36,21,0.12) !important;
+    border-color: #8A9A7B !important;
+}
+
+/* Active Category Tab (Sage Green) */
+.stButton > button[kind="primary"] {
+    background-color: #8A9A7B !important;
+    color: #FFFFFF !important;
+    border-color: #8A9A7B !important;
+}
+
+/* Secondary Buttons (Category Tabs & Qty) */
+.stButton > button[kind="secondary"] {
+    background-color: #E8DCC8 !important;
+    color: #3C2415 !important;
+    border: none !important;
+    border-radius: 12px !important;
+    height: 45px !important;
+    font-weight: 600 !important;
+}
+
+/* ========================================= */
+/* CART PANEL                                */
+/* ========================================= */
+.cart-panel {
+    background: #FFFFFF !important;
+    border-radius: 16px !important;
+    padding: 1.5rem !important;
+    box-shadow: 0 4px 12px rgba(60,36,21,0.08) !important;
+    position: sticky !important;
+    top: 1rem !important;
+}
+
+.cart-item-name {
+    font-weight: 600 !important;
+    color: #3C2415 !important;
+    font-size: 1rem !important;
+    margin-bottom: 0.25rem !important;
+}
+
+.cart-item-meta {
+    font-size: 0.875rem !important;
+    color: #6B5444 !important;
+}
+
+.cart-item-total {
+    font-weight: 700 !important;
+    color: #8A9A7B !important;
+    font-size: 1.1rem !important;
+    text-align: right !important;
+    padding-top: 0.5rem !important;
+}
+
+/* Quantity Display */
+.qty-display {
+    text-align: center !important;
+    font-weight: 700 !important;
+    color: #8A9A7B !important;
+    font-size: 1.1rem !important;
+    padding-top: 0.5rem !important;
+}
+
+/* Quantity Buttons (Small and clean) */
+/* We target the last column in the row for qty buttons usually */
+div[data-testid="column"] > div > div[data-testid="stHorizontalBlock"] > div:last-child > div > button {
+    background-color: #E8DCC8 !important;
+    color: #3C2415 !important;
+    border-radius: 8px !important;
+    min-height: 36px !important;
+    font-weight: 700 !important;
+    font-size: 1.2rem !important;
+    padding: 0 !important;
+}

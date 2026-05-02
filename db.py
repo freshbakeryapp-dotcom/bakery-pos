@@ -5,8 +5,9 @@ from datetime import datetime
 DB_PATH = os.path.join(os.path.dirname(__file__), "bakery.db")
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    """Get database connection"""
+    conn = sqlite3.connect('bakery.db')
+    conn.row_factory = sqlite3.Row  # Enable dict-like access
     return conn
 
 def init_db():
@@ -116,4 +117,43 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Database initialized.")
+    # Add to your init_db() SQL string
+"""
+CREATE TABLE IF NOT EXISTS inventory_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ingredient_id INTEGER NOT NULL,
+    type TEXT NOT NULL, -- 'production', 'purchase', 'waste', 'adjustment'
+    quantity REAL NOT NULL, -- negative for usage, positive for restock
+    reference_id INTEGER,   -- production_run_id or purchase_order_id
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS production_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    quantity_baked REAL NOT NULL,
+    status TEXT DEFAULT 'planned', -- 'planned', 'in_progress', 'completed', 'cancelled'
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS recipes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    ingredient_id INTEGER NOT NULL,
+    coefficient_grams REAL NOT NULL -- grams per unit baked
+);
+
+CREATE TABLE IF NOT EXISTS monthly_usage_coeffs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL,
+    ingredient_id INTEGER NOT NULL,
+    month TEXT NOT NULL, -- format: '2026-05'
+    coefficient REAL NOT NULL, -- 1.0 = matches recipe, 1.10 = +10% usage
+    confidence REAL NOT NULL, -- 0.0 to 1.0 based on data volume
+    data_points INTEGER NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(product_id, ingredient_id, month)
+);
+"""
+print("Database initialized.")
